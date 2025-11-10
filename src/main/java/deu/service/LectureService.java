@@ -5,6 +5,7 @@ import deu.model.dto.response.BasicResponse;
 import deu.model.entity.Lecture;
 import deu.model.enums.DayOfWeek;
 import deu.repository.LectureRepository;
+import deu.model.enums.Semester;
 
 import java.time.LocalTime;
 import java.util.List;
@@ -81,6 +82,23 @@ public class LectureService {
 
         // 최종 결과 반환 (스케줄 배열을 포함한 응답 객체)
         return new BasicResponse("200", schedule);
+    }
+    
+     // ✅ 신규 추가 (연/학기 + 강의실 필터 기반 강의 조회)
+    public List<Lecture> findLectures(Integer year, String semester, String building, String floor, String lectureroom) {
+        if (year == null || semester == null || building == null || floor == null || lectureroom == null) {
+            return List.of();
+        }
+
+        Semester sem;
+        try {
+            sem = Semester.valueOf(semester.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            sem = Semester.FIRST; // 기본값 보정
+        }
+
+        // LectureRepository 통해 실제 YAML 데이터 조회
+        return LectureRepository.getInstance().findRoomLectures(year, sem, building, floor, lectureroom);
     }
 
     // 건물, 층, 강의실, 요일, 시간 정보가 모두 유효한지 확인

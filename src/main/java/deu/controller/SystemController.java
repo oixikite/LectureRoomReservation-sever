@@ -69,6 +69,10 @@ public class SystemController {
             else if (request instanceof LectureCommandRequest r) {
                 return switch (r.command) {
                     case "주간 강의 조회" -> lectureController.handleReturnLectureOfWeek((LectureRequest) r.payload);
+                    
+                    case "강의실 강의 조회" ->
+                    lectureController.handleFindLecturesByFilter((deu.model.dto.request.data.lecture.LectureFilterRequest) r.payload);
+
                     default -> new BasicResponse("404", "알 수 없는 명령어");
                 };
             }
