@@ -1,11 +1,13 @@
 package deu.repository;
 
 import deu.model.entity.Lecture;
+import deu.model.enums.Semester;
 import lombok.Getter;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.nodes.Tag;
 import org.yaml.snakeyaml.representer.Representer;
+
 
 import java.io.*;
 import java.util.ArrayList;
@@ -27,6 +29,10 @@ public class LectureRepository {
 
     // 강의 리스트
     private final List<Lecture> lectureList = new ArrayList<>();
+    
+    //연도,학기 기본값 설정
+    private static final int DEFAULT_YEAR = 2025;
+    private static final Semester DEFAULT_SEMESTER = Semester.FIRST;
 
     // YAML 파일 경로 (JAR 또는 IDE 실행 경로 기준)
     private final String FILE_PATH = System.getProperty("user.dir") + File.separator + "data" + File.separator + "lectures.yaml";
@@ -139,19 +145,48 @@ public class LectureRepository {
             System.err.println("[LectureRepository] 파일 로딩 중 오류 발생: " + e.getMessage());
             e.printStackTrace();
         }
+        
+        //누락 필드 보정(연도,학기)
+        boolean patched = false;
+        for (Lecture l : lectureList) {
+            if (l.getYear() == null || l.getYear() == 0) {
+                l.setYear(DEFAULT_YEAR);
+                patched = true;
+            }
+            if (l.getSemester() == null) {
+                l.setSemester(DEFAULT_SEMESTER);
+                patched = true;
+            }
+        }
+        if (patched) {
+            System.out.println("[LectureRepository] 누락된 year/semester 보정 후 파일에 반영합니다.");
+            saveAllToFile(); // 기존 YAML을 덮어써서 year/semester가 추가되도록 함
+        }
     }
 
-    // 강의 저장 (수정 포함)
-    public String save(Lecture lecture) {
-        if (lecture == null || lecture.getId() == null || lecture.getId().isBlank()) {
-            return "400"; // 잘못된 요청
-        }
+    // 강의 저장 (수정 포함) - 기존코드
+//    public String save(Lecture lecture) {
+//        if (lecture == null || lecture.getId() == null || lecture.getId().isBlank()) {
+//            return "400"; // 잘못된 요청
+//        }
+//
+//        deleteById(lecture.getId());
+//        lectureList.add(lecture);
+//        saveAllToFile();
+//        return "200";
+//    }
+     public String save(Lecture lecture) {
+        if (lecture == null || lecture.getId() == null || lecture.getId().isBlank()) return "400";
+        // 안전장치: 저장 시에도 기본값 주입
+        if (lecture.getYear() == null || lecture.getYear() == 0) lecture.setYear(DEFAULT_YEAR);
+        if (lecture.getSemester() == null) lecture.setSemester(DEFAULT_SEMESTER);
 
         deleteById(lecture.getId());
         lectureList.add(lecture);
         saveAllToFile();
         return "200";
     }
+    
 
     // 강의 삭제
     public String deleteById(String id) {
@@ -182,4 +217,59 @@ public class LectureRepository {
                 .map(Lecture::getId)
                 .findFirst();
     }
+    
+    //특정 학년도.학기 기반 조회 및 검증
+    public List<Lecture> findAllByYearAndSemester(int year, Semester semester) {
+    List<Lecture> result = new ArrayList<>();
+    for (Lecture l : lectureList) {
+        if (l.getYear() == year && l.getSemester() == semester) {
+            result.add(l);
+        }
+    }
+    return result;
+}
+    //건물/층/강의실 + 학년도/학기 필터 조회
+    public List<Lecture> findRoomLectures(int year, Semester semester,
+                                      String building, String floor, String lectureroom) {
+    List<Lecture> result = new ArrayList<>();
+    for (Lecture l : lectureList) {
+        if (l.getYear() == year && l.getSemester() == semester
+                && building.equals(l.getBuilding())
+                && floor.equals(l.getFloor())
+                && lectureroom.equals(l.getLectureroom())) {
+            result.add(l);
+        }
+    }
+    return result;
+}
+    // 시각 "HH:mm" 문자열 비교용: startA < endB && startB < endA 면 겹침
+private static boolean timeOverlaps(String startA, String endA, String startB, String endB) {
+    return startA.compareTo(endB) < 0 && startB.compareTo(endA) < 0;
+}
+
+/** 
+ * 동일 강의실/요일/학년/학기에서 시간 겹침 존재 여부
+ * newLecture와 id가 같은 기존 항목은 제외(수정 시 자기 자신 제외)
+ */
+public boolean hasTimeConflict(Lecture newLecture) {
+    for (Lecture l : lectureList) {
+        if (l.getId() != null && l.getId().equals(newLecture.getId())) continue;
+        if (l.getYear() == newLecture.getYear()
+                && l.getSemester() == newLecture.getSemester()
+                && l.getBuilding().equals(newLecture.getBuilding())
+                && l.getFloor().equals(newLecture.getFloor())
+                && l.getLectureroom().equals(newLecture.getLectureroom())
+                && l.getDay().equals(newLecture.getDay())) {
+            if (timeOverlaps(l.getStartTime(), l.getEndTime(),
+                             newLecture.getStartTime(), newLecture.getEndTime())) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+
+
+
 }
