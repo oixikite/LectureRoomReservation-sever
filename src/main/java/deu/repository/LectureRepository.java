@@ -207,6 +207,7 @@ public class LectureRepository {
 
     // 전체 강의 리스트 반환
     public List<Lecture> findAll() {
+        loadAllFromFile();
         return new ArrayList<>(lectureList);
     }
 

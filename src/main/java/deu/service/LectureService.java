@@ -33,7 +33,7 @@ public class LectureService {
         // 2. 스케줄 2차원 배열 생성 (행: 요일 7개, 열: 0교시~12교시 총 13개)
         Lecture[][] schedule = new Lecture[7][13];
 
-        // 3. 전체 강의 목록을 로드 (파일 기반 리포지토리에서 YAML 파싱하여 불러옴)
+        // 3. 전체 강의 목록을 로드 (Repository의 findAll()이 최신 데이터를 가져옴)
         List<Lecture> lectures = LectureRepository.getInstance().findAll();
         if (lectures.isEmpty()) {
             return new BasicResponse("404", "파일에서 강의 정보를 불러오지 못했습니다.");
@@ -44,33 +44,33 @@ public class LectureService {
             // 유효한 강의인지 (null 여부, 강의실/건물/층 일치, 요일/시간 존재 여부 등)
             if (!isValidLectureForRoom(lec, building, floor, lectureroom)) continue;
 
-            // 문자열로 된 요일을 enum 타입으로 변환 (예: "MONDAY" → DayOfWeek.MONDAY)
-            DayOfWeek lecDay;
-            try {
-                lecDay = DayOfWeek.fromString(lec.getDay());
-            } catch (IllegalArgumentException e) {
+            //5.[수정] 한글("토")과 영어("SATURDAY") 요일을 DayOfWeek Enum 타입으로 변환
+            DayOfWeek lecDay = convertToDayOfWeekEnum(lec.getDay());
+
+            if (lecDay == null) {
                 // 잘못된 요일 텍스트일 경우 무시하고 계속 진행
                 System.err.println("[LectureService] 잘못된 요일: " + lec.getDay());
                 continue;
             }
 
-            // 변환된 요일이 현재 7일 배열의 몇 번째에 해당하는지 확인
+            // 변환된 요일이 현재 7일 배열(orderedDays)의 몇 번째에 해당하는지 확인
             int dayIndex = indexOfDay(orderedDays, lecDay);
             if (dayIndex == -1) continue; // 요일이 7일 범위에 없다면 스킵
 
             try {
-                // 시작 및 종료 시간을 LocalTime으로 파싱 ("14:00" → LocalTime.of(14, 0))
+                //시작 및 종료 시간을 LocalTime으로 파싱 ("14:00" → LocalTime.of(14, 0))
                 LocalTime start = LocalTime.parse(lec.getStartTime());
                 LocalTime end = LocalTime.parse(lec.getEndTime());
 
-                // 5. 각 교시에 대해 해당 강의가 포함되는지 체크하여 스케줄에 할당
+                // 각 교시에 대해 해당 강의가 포함되는지 체크하여 스케줄에 할당
                 for (int period = 0; period < 13; period++) {
                     // 각 교시는 9시부터 1시간 간격 (9~10, 10~11, ..., 21~22)
                     LocalTime periodStart = LocalTime.of(9 + period, 0);
                     LocalTime periodEnd = periodStart.plusHours(1);
 
-                    // 강의 시간이 이 교시와 겹치는 경우 해당 칸에 강의 배치
-                    if (!end.isBefore(periodStart) && !start.isAfter(periodEnd.minusMinutes(1))) {
+                    //[수정] 겹침 계산 로직 변경 (StartA < EndB AND EndA > StartB)
+                    // (11:00 종료 강의가 11:00~12:00 슬롯을 포함하지 않도록 수정)
+                    if (start.isBefore(periodEnd) && end.isAfter(periodStart)) {
                         schedule[dayIndex][period] = lec;
                     }
                 }
@@ -84,12 +84,12 @@ public class LectureService {
         return new BasicResponse("200", schedule);
     }
     
-     // ✅ 신규 추가 (연/학기 + 강의실 필터 기반 강의 조회)
+    //(연/학기 + 강의실 필터 기반 강의 조회)
     public List<Lecture> findLectures(Integer year, String semester, String building, String floor, String lectureroom) {
         if (year == null || semester == null || building == null || floor == null || lectureroom == null) {
             return List.of();
         }
-
+        
         Semester sem;
         try {
             sem = Semester.valueOf(semester.toUpperCase());
@@ -112,7 +112,23 @@ public class LectureService {
                 lec.getEndTime() != null;
     }
 
-    // 요일 배열에서 특정 요일의 인덱스 반환
+    //[추가] 한글 및 영어 요일을 DayOfWeek Enum으로 변환하는 헬퍼 메서드
+    private DayOfWeek convertToDayOfWeekEnum(String day) {
+        if (day == null) return null;
+        
+        return switch (day.toUpperCase()) { // 대소문자 무시
+            case "월", "MONDAY" -> DayOfWeek.MONDAY;
+            case "화", "TUESDAY" -> DayOfWeek.TUESDAY;
+            case "수", "WEDNESDAY" -> DayOfWeek.WEDNESDAY;
+            case "목", "THURSDAY" -> DayOfWeek.THURSDAY;
+            case "금", "FRIDAY" -> DayOfWeek.FRIDAY;
+            case "토", "SATURDAY" -> DayOfWeek.SATURDAY;
+            case "일", "SUNDAY" -> DayOfWeek.SUNDAY;
+            default -> null; // 잘못된 값이면 null
+        };
+    }
+
+    //요일 배열에서 특정 요일의 인덱스 반환
     private int indexOfDay(DayOfWeek[] array, DayOfWeek target) {
         for (int i = 0; i < array.length; i++) {
             if (array[i] == target) return i;
