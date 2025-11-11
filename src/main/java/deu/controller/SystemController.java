@@ -8,6 +8,7 @@ import deu.model.dto.request.data.reservation.RoomReservationLocationRequest;
 import deu.model.dto.request.data.reservation.RoomReservationRequest;
 import deu.model.dto.request.data.user.*;
 import deu.model.dto.response.BasicResponse;
+import deu.model.entity.Lecture;
 
 public class SystemController {
     private final UserController userController = UserController.getInstance();
@@ -15,6 +16,7 @@ public class SystemController {
     private final LectureController lectureController = LectureController.getInstance();
     private final ReservationController reservationController = ReservationController.getInstance();
     private final ReservationManagementController reservationManagementController = ReservationManagementController.getInstance();
+  
 
     public Object handle(Object request) {
         try {
@@ -73,6 +75,24 @@ public class SystemController {
                     case "강의실 강의 조회" ->
                     lectureController.handleFindLecturesByFilter((deu.model.dto.request.data.lecture.LectureFilterRequest) r.payload);
 
+                        // -----------------------------------------------------------
+                    //[신규] 강의 추가 (payload로 Lecture 객체를 받습니다)
+                    // -----------------------------------------------------------
+                    case "강의 추가" ->
+                            lectureController.handleAddLecture((Lecture) r.payload);
+
+                    // -----------------------------------------------------------
+                    //[신규] 강의 수정 (payload로 Lecture 객체를 받습니다)
+                    // -----------------------------------------------------------
+                    case "강의 수정" ->
+                            lectureController.handleUpdateLecture((Lecture) r.payload);
+
+                    // -----------------------------------------------------------
+                    //[신규] 강의 삭제 (payload로 강의 ID(String)를 받습니다)
+                    // -----------------------------------------------------------
+                    case "강의 삭제" ->
+                            lectureController.handleDeleteLecture((String) r.payload);
+                        
                     default -> new BasicResponse("404", "알 수 없는 명령어");
                 };
             }
