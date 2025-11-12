@@ -207,7 +207,7 @@ public class LectureRepository {
 
     // 전체 강의 리스트 반환
     public List<Lecture> findAll() {
-        loadAllFromFile();
+        //loadAllFromFile();
         return new ArrayList<>(lectureList);
     }
 
@@ -243,34 +243,105 @@ public class LectureRepository {
     }
     return result;
 }
-    // 시각 "HH:mm" 문자열 비교용: startA < endB && startB < endA 면 겹침
-private static boolean timeOverlaps(String startA, String endA, String startB, String endB) {
-    return startA.compareTo(endB) < 0 && startB.compareTo(endA) < 0;
-}
-
-/** 
- * 동일 강의실/요일/학년/학기에서 시간 겹침 존재 여부
- * newLecture와 id가 같은 기존 항목은 제외(수정 시 자기 자신 제외)
- */
+    
 public boolean hasTimeConflict(Lecture newLecture) {
-    for (Lecture l : lectureList) {
-        if (l.getId() != null && l.getId().equals(newLecture.getId())) continue;
-        if (l.getYear() == newLecture.getYear()
-                && l.getSemester() == newLecture.getSemester()
-                && l.getBuilding().equals(newLecture.getBuilding())
-                && l.getFloor().equals(newLecture.getFloor())
-                && l.getLectureroom().equals(newLecture.getLectureroom())
-                && l.getDay().equals(newLecture.getDay())) {
+
+        // 문제점 발생 원인을 찾기 위한 전달 받은 값 출력
+        System.out.println("\n--- 강의실 중복 검증 시작 ---");
+        System.out.println("새 강의 정보: " + newLecture.getTitle() + " (" + newLecture.getId() + ")");
+        System.out.println("  > " + newLecture.getYear() + "년 " + newLecture.getSemester() + ", " +
+                newLecture.getBuilding() + " " + newLecture.getLectureroom() + ", " +
+                newLecture.getDay() + " (" + newLecture.getStartTime() + "~" + newLecture.getEndTime() + ")");
+        System.out.println("-------------------------");
+
+        // newLecture의 Year와 Floor를 String으로 변환 (타입 안정성 확보)
+        // 기존 비교 연산을 사용하지 않고 문자열로 변환해서 비교를 수행 기존 값을 수정하거나 하지는 않고
+        // 비교 검증에만 새로운 변수를 생성해서 비교함
+        String newYearStr = String.valueOf(newLecture.getYear());
+        String newFloorStr = newLecture.getFloor();
+
+        for (Lecture l : lectureList) {
+
+            // 자기 자신 제외 (수정 시)
+            if (l.getId() != null && l.getId().equals(newLecture.getId())) {
+                System.out.println("[PASS] ID가 같아 검사 대상에서 제외: " + l.getId());
+                continue;
+            }
+
+            // l 객체의 Year와 Floor도 String으로 변환
+            String lYearStr = String.valueOf(l.getYear());
+            String lFloorStr = l.getFloor();
+
+            // 2. 물리적/학기적 조건 비교 (모든 비교를 .equals()로 통일)
+            boolean isSameContext = lYearStr.equals(newYearStr)
+                    && l.getSemester().equals(newLecture.getSemester())
+                    && l.getBuilding().equals(newLecture.getBuilding())
+                    && lFloorStr.equals(newFloorStr)
+                    && l.getLectureroom().equals(newLecture.getLectureroom())
+                    //&& l.getDay().equals(newLecture.getDay());
+                    && convertDayToIndex(l.getDay()) == convertDayToIndex(newLecture.getDay());
+                    
+            // 3. 조건 불일치 시 상세 로그 출력
+        
+            if (!isSameContext) {
+                System.out.println("[FILTERED] 조건 불일치 강의: " + l.getTitle() + " (" + l.getId() + ")");
+                System.out.println("  > 기존 정보: " + lYearStr + "/" + l.getSemester() +
+                        ", 강의실: " + l.getBuilding() + " " + l.getLectureroom() +
+                        ", 요일: " + l.getDay());
+
+//                System.out.println("    --- 불일치 세부 원인 ---");
+//                if (!lYearStr.equals(newYearStr)) System.out.println("    - 원인: 년도 불일치 (" + lYearStr + " != " + newYearStr + ")");
+//                if (!l.getSemester().equals(newLecture.getSemester())) System.out.println("    - 원인: 학기 불일치");
+//                if (!l.getBuilding().equals(newLecture.getBuilding())) System.out.println("    - 원인: 건물 불일치");
+//                if (!lFloorStr.equals(newFloorStr)) System.out.println("    - 원인: 층 불일치");
+//                if (!l.getLectureroom().equals(newLecture.getLectureroom())) System.out.println("    - 원인: 강의실 불일치");
+//                //if (!l.getDay().equals(newLecture.getDay())) System.out.println("    - 원인: 요일 불일치");
+//                if (convertDayToIndex(l.getDay()) != convertDayToIndex(newLecture.getDay())) {
+//                    System.out.println("     - 원인: 요일 불일치 (" + l.getDay() + " != " + newLecture.getDay() + ")");
+//                }
+//                System.out.println("--------------------------");
+                
+                continue;
+            }
+            
+
+            // 4. 시간 겹침 검사
             if (timeOverlaps(l.getStartTime(), l.getEndTime(),
-                             newLecture.getStartTime(), newLecture.getEndTime())) {
+                    newLecture.getStartTime(), newLecture.getEndTime())) {
+
+                // 찾은 부분 확인
+                System.out.println("\n### [CONFLICT FOUND] 시간표 충돌 발견! ###");
+                System.out.println("    > 기존 강의: " + l.getTitle() + " (" + l.getId() + ")");
+                System.out.println("    > 시간대: " + l.getStartTime() + " ~ " + l.getEndTime());
+                System.out.println("#########################################\n");
                 return true;
             }
         }
+
+        System.out.println("--- 강의실 중복 검증 완료: 충돌 없음 ---");
+        return false;
     }
-    return false;
-}
 
-
-
+    // 시각 "HH:mm" 문자열 비교용: startA < endB && startB < endA 면 겹침
+    private static boolean timeOverlaps(String startA, String endA, String startB, String endB) {
+        return startA.compareTo(endB) < 0 && startB.compareTo(endA) < 0;
+    }
+    
+    //한글 및 영어 요일을 0-6 인덱스로 변환하는 헬퍼 메서드
+    // (LectureService의 것과 동일)
+    private int convertDayToIndex(String day) {
+        if (day == null) return -1;
+        
+        return switch (day.toUpperCase()) { // 대소문자 무시
+            case "월", "MONDAY" -> 0;
+            case "화", "TUESDAY" -> 1;
+            case "수", "WEDNESDAY" -> 2;
+            case "목", "THURSDAY" -> 3;
+            case "금", "FRIDAY" -> 4;
+            case "토", "SATURDAY" -> 5;
+            case "일", "SUNDAY" -> 6;
+            default -> -1; // 잘못된 값이면 -1
+        };
+    }
 
 }
