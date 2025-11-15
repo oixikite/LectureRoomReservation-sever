@@ -39,4 +39,17 @@ public class NotificationController {
             return new BasicResponse("500", "알림 조회 중 오류 발생: " + e.getMessage());
         }
     }
+    
+    /**
+     * 알림 전체 내역 조회 핸들러
+     */
+    public BasicResponse handleGetAllNotifications(String userId) {
+        try {
+            List<NotificationDTO> allNotifications = notificationService.getAllNotifications(userId);
+            return new BasicResponse("200", allNotifications);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new BasicResponse("500", "알림 전체 조회 중 오류: " + e.getMessage());
+        }
+    }
 }

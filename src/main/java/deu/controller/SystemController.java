@@ -106,10 +106,11 @@ public class SystemController {
             else if (request instanceof NotificationCommandRequest r) {
                  return switch (r.command) {
                     case "알림 조회" -> notificationController.handleGetNotifications((String) r.payload);
+                    case "알림 전체 조회" -> notificationController.handleGetAllNotifications((String) r.payload);
                     default -> new BasicResponse("404", "알 수 없는 알림 명령어");
                 };
             }
-
+            
             return new BasicResponse("405", "지원하지 않는 요청 타입");
         } catch (Exception e) {
             e.printStackTrace(); // 로그 출력 (디버깅)

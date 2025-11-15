@@ -84,6 +84,19 @@ public class NotificationService {
         }
         return new ArrayList<>();
     }
+  
+  /**
+     * 특정 사용자의 모든 알림 내역을 반환. (읽음 여부 상관없이)
+     * 알림함(History) 조회용
+     */
+    public synchronized List<NotificationDTO> getAllNotifications(String userId) {
+        if (notificationDatabase.containsKey(userId)) {
+            // 최신순으로 보여주기 위해 리스트를 뒤집거나, 클라이언트에서 정렬하면 됩니다.
+            // 여기서는 있는 그대로 복사해서 반환합니다.
+            return new ArrayList<>(notificationDatabase.get(userId));
+        }
+        return new ArrayList<>();
+    }
     
     // --- 파일 입출력 메서드 ---
 
