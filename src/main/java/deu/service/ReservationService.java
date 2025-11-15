@@ -8,6 +8,9 @@ import deu.repository.ReservationRepository;
 import deu.model.dto.response.BasicResponse;
 import lombok.Getter;
 
+import deu.model.dto.response.NotificationDTO;
+import deu.service.NotificationService;
+
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -182,7 +185,13 @@ public class ReservationService {
             original.setDayOfTheWeek(payload.getDayOfTheWeek());
             original.setStartTime(payload.getStartTime());
             original.setEndTime(payload.getEndTime());
-
+            
+            //알림 저장
+            String title = "예약 수정";
+            String message = String.format("[%s, %s] %s~%s 예약이 (관리자에 의해) 수정되었습니다.",
+                    original.getLectureRoom(), original.getDate(), original.getStartTime(), original.getEndTime());
+            saveNotification(original, title, message);
+            
             // 파일 저장
             repo.saveToFile();
 
@@ -230,12 +239,32 @@ public class ReservationService {
 
     // 관리자 예약 삭제
     public BasicResponse deleteRoomReservationFromManagement(String payload) {
-        boolean deleted = ReservationRepository.getInstance().deleteById(payload);
-        if (deleted) {
-            ReservationRepository.getInstance().saveToFile();
-            return new BasicResponse("200", "예약이 삭제되었습니다.");
+//        boolean deleted = ReservationRepository.getInstance().deleteById(payload);
+//        if (deleted) {
+//            ReservationRepository.getInstance().saveToFile();
+//            return new BasicResponse("200", "예약이 삭제되었습니다.");
+//        }
+//        return new BasicResponse("404", "예약을 찾을 수 없습니다.");
+        // ID로 예약을 먼저 찾습니다.
+        RoomReservation target = ReservationRepository.getInstance().findById(payload);
+        if (target == null) {
+            return new BasicResponse("404", "예약을 찾을 수 없습니다.");
         }
-        return new BasicResponse("404", "예약을 찾을 수 없습니다.");
+        
+        // 물리적 삭제 대신 상태 변경 (Soft Delete)
+        target.setStatus("삭제됨"); 
+
+        // 알림 저장
+        String title = "예약 취소";
+        String message = String.format("[%s, %s] %s~%s 예약이 (관리자에 의해) 취소되었습니다.",
+                target.getLectureRoom(), target.getDate(), target.getStartTime(), target.getEndTime());
+        saveNotification(target, title, message);
+        
+        // 파일에 저장
+        ReservationRepository.getInstance().saveToFile();
+        
+        return new BasicResponse("200", "예약이 '삭제됨' 상태로 변경되었습니다.");
+        
     }
 
     // 예약 상태 변경 "대기 -> 완료"
@@ -245,9 +274,21 @@ public class ReservationService {
             return new BasicResponse("404", "예약을 찾을 수 없습니다.");
         }
 
+        if ("승인".equals(target.getStatus())) {
+             return new BasicResponse("409", "이미 승인된 예약입니다.");
+        }
+        
         target.setStatus("승인");
+
+        //알림 저장
+        String title = "예약 승인";
+        String message = String.format("[%s, %s] %s~%s 예약이 승인되었습니다.",
+                target.getLectureRoom(), target.getDate(), target.getStartTime(), target.getEndTime());
+        saveNotification(target, title, message);
+        
         ReservationRepository.getInstance().saveToFile();
-        return new BasicResponse("200", "예약 상태가 승인로 변경되었습니다.");
+        return new BasicResponse("200", "예약 상태가 승인으로 변경되었습니다.");
+        
     }
 
     // 예약 상태가 "대기" 인 모든 예약 내역 반환
@@ -260,4 +301,27 @@ public class ReservationService {
     }
 
     // =================================================================================================================
+    // =================================================================================================================
+    
+    /**
+     *알림 저장 공통 헬퍼 메서드
+     */
+    private void saveNotification(RoomReservation reservation, String title, String message) {
+        try {
+            // 알림을 받을 사용자 ID
+            String studentId = reservation.getNumber();
+            if (studentId == null || studentId.isBlank()) {
+                return;
+            }
+
+            // DTO 생성
+            NotificationDTO notification = new NotificationDTO(title, message, System.currentTimeMillis());
+
+            // 저장소에 저장 (클라이언트가 나중에 폴링으로 가져감)
+            NotificationService.getInstance().addNotification(studentId, notification);
+
+        } catch (Exception e) {
+            System.err.println("[ReservationService] 알림 저장 중 오류: " + e.getMessage());
+        }
+    }
 }
