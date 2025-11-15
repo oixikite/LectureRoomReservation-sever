@@ -79,15 +79,23 @@ public class ReservationRepository {
     }
 
     // 사용자 ID로 전체 예약 조회
-    public List<RoomReservation> findByUser(String userId) {
-        List<RoomReservation> results = new ArrayList<>();
-        for (RoomReservation r : roomReservationList) {
-            if (r.getNumber().equals(userId)) {
-                results.add(r);
-            }
+   // 사용자 ID로 전체 예약 조회 (대소문자 무시)
+public List<RoomReservation> findByUser(String userId) {
+
+    if (userId == null) return new ArrayList<>();
+
+    String target = userId.trim().toLowerCase();
+
+    List<RoomReservation> results = new ArrayList<>();
+    for (RoomReservation r : roomReservationList) {
+        if (r.getNumber() != null &&
+            r.getNumber().trim().toLowerCase().equals(target)) {
+            results.add(r);
         }
-        return results;
     }
+    return results;
+}
+
 
     // 모든 예약 반환
     public List<RoomReservation> findAll() {
