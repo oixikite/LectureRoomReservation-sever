@@ -13,6 +13,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 강의 정보를 YAML 파일로 관리하는 저장소 클래스
@@ -25,10 +26,12 @@ public class LectureRepository {
     // 외부에서 접근하는 싱글톤 인스턴스
     // Singleton instance
     @Getter
-    private static final LectureRepository instance = new LectureRepository();
+    private static final LectureRepository instance = new LectureRepository();   //적극적 초기화
 
-    // 강의 리스트
-    private final List<Lecture> lectureList = new ArrayList<>();
+    // 강의 리스트(기존)
+    //private final List<Lecture> lectureList = new ArrayList<>();
+    //동시성 지원 리스트로 변경 (읽기 성능 최적화 및 반복문 에러 방지)
+    private final List<Lecture> lectureList = new CopyOnWriteArrayList<>();
     
     //연도,학기 기본값 설정
     private static final int DEFAULT_YEAR = 2025;
@@ -164,18 +167,7 @@ public class LectureRepository {
         }
     }
 
-    // 강의 저장 (수정 포함) - 기존코드
-//    public String save(Lecture lecture) {
-//        if (lecture == null || lecture.getId() == null || lecture.getId().isBlank()) {
-//            return "400"; // 잘못된 요청
-//        }
-//
-//        deleteById(lecture.getId());
-//        lectureList.add(lecture);
-//        saveAllToFile();
-//        return "200";
-//    }
-     public String save(Lecture lecture) {
+     public synchronized String save(Lecture lecture) {
         if (lecture == null || lecture.getId() == null || lecture.getId().isBlank()) return "400";
         // 안전장치: 저장 시에도 기본값 주입
         if (lecture.getYear() == null || lecture.getYear() == 0) lecture.setYear(DEFAULT_YEAR);
@@ -189,7 +181,7 @@ public class LectureRepository {
     
 
     // 강의 삭제
-    public String deleteById(String id) {
+    public synchronized String deleteById(String id) {
         boolean removed = lectureList.removeIf(l -> l.getId().equals(id));
         saveAllToFile();
         return removed ? "200" : "404";
@@ -205,9 +197,8 @@ public class LectureRepository {
         return lectureList.stream().filter(l -> l.getId().equals(id)).findFirst();
     }
 
-    // 전체 강의 리스트 반환
+    // 전체 강의 리스트 반환. 읽기 작업은 synchronized 없이 수행 (CopyOnWriteArrayList 덕분에 안전하고 빠름)
     public List<Lecture> findAll() {
-        //loadAllFromFile();
         return new ArrayList<>(lectureList);
     }
 
