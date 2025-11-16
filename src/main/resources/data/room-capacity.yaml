@@ -1,0 +1,29 @@
+rooms:
+  - building: "정보관"
+    floor: 9
+    room: "911"
+    capacity: 3
+  - building: "정보관"
+    floor: 9
+    room: "912"
+    capacity: 3
+  - building: "정보관"
+    floor: 9
+    room: "913"
+    capacity: 3
+  - building: "정보관"
+    floor: 9
+    room: "914"
+    capacity: 3
+  - building: "정보관"
+    floor: 9
+    room: "915"
+    capacity: 3
+  - building: "정보관"
+    floor: 9
+    room: "916"
+    capacity: 3
+  - building: "정보관"
+    floor: 9
+    room: "918"
+    capacity: 3

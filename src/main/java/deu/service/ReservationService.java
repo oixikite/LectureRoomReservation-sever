@@ -6,6 +6,7 @@ import deu.model.dto.request.data.reservation.RoomReservationRequest;
 import deu.model.dto.response.BasicResponse;
 import deu.model.entity.RoomReservation;
 import deu.repository.ReservationRepository;
+import deu.repository.RoomCapacityRepository;
 import deu.service.policy.ProfessorReservationPolicy;
 import deu.service.policy.ReservationPolicy;
 import deu.service.policy.StudentReservationPolicy;
@@ -61,11 +62,47 @@ public class ReservationService {
                 return new BasicResponse("400", "사용자 번호 형식이 올바르지 않습니다. (S**** / P****)");
             }
 
-            // === 2) 정책 validate() 실행 (하루 전 제한 등) ===
+            // === 2) 개별 정책 검증 ===
             try {
                 policy.validate(payload);
             } catch (Exception ex) {
                 return new BasicResponse("403", ex.getMessage());
+            }
+
+            // ===================================================================
+            // 2-1) 정원(capacity) 정책: 정원의 50% 초과 시 예약 불가
+            // ===================================================================
+            try {
+                RoomCapacityRepository capacityRepo = RoomCapacityRepository.getInstance();
+
+                int capacity = capacityRepo.getCapacity(
+                        payload.getBuildingName(),
+                        payload.getFloor(),
+                        payload.getLectureRoom()
+                );
+
+                if (capacity > 0) {
+                    int limit = (int) Math.ceil(capacity * 0.5);  // ex) 3명 → 1.5 → 2명
+
+                    List<RoomReservation> existing =
+                            repo.findAll().stream()
+                                    .filter(r -> r.getBuildingName().equals(payload.getBuildingName()))
+                                    .filter(r -> r.getFloor().equals(payload.getFloor()))
+                                    .filter(r -> r.getLectureRoom().equals(payload.getLectureRoom()))
+                                    .filter(r -> r.getDate().equals(payload.getDate()))
+                                    .filter(r -> r.getStartTime().equals(payload.getStartTime()))
+                                    .filter(r -> !"삭제됨".equals(r.getStatus()))
+                                    .toList();
+
+                    if (existing.size() >= limit) {
+                        return new BasicResponse(
+                                "403",
+                                "정원의 50%(" + limit + "명)를 초과하여 예약할 수 없습니다."
+                        );
+                    }
+                }
+            } catch (Exception ex) {
+                return new BasicResponse("500", "정원 검증 오류: " + ex.getMessage());
             }
 
             // === 하루 시간 제한 (학생 120분 / 교수 180분) ===
@@ -74,7 +111,6 @@ public class ReservationService {
                     .toList();
 
             int usedMinutes = 0;
-
             for (RoomReservation r : todays) {
                 LocalTime s = LocalTime.parse(r.getStartTime());
                 LocalTime e = LocalTime.parse(r.getEndTime());
@@ -86,9 +122,9 @@ public class ReservationService {
                     LocalTime.parse(payload.getEndTime())
             );
 
-            int limit = lower.startsWith("p") ? 180 : 120;
+            int limitMinutes = lower.startsWith("p") ? 180 : 120;
 
-            if (usedMinutes + newMinutes > limit) {
+            if (usedMinutes + newMinutes > limitMinutes) {
                 return new BasicResponse("403",
                         lower.startsWith("p")
                                 ? "교수님은 하루 최대 3시간까지 예약 가능합니다."
@@ -115,24 +151,17 @@ public class ReservationService {
                 return new BasicResponse("403", "오늘부터 7일간 최대 5회까지만 예약 가능합니다.");
             }
 
-            // === 동일 사용자 중복 예약 방지 ===
+            // === 동일 사용자 중복 예약 방지 ===  
             for (RoomReservation r : repo.findByUser(number)) {
                 if (r.getDate().equals(payload.getDate())
                         && r.getStartTime().equals(payload.getStartTime())) {
-                    return new BasicResponse("409", "이미 해당 시간에 예약이 존재합니다.");
+                    return new BasicResponse("409", "이미 해당 시간에 본인의 예약이 존재합니다.");
                 }
             }
 
-            // === 강의실 중복 방지 ===
-            boolean dup = repo.isDuplicate(
-                    payload.getDate(),
-                    payload.getStartTime(),
-                    payload.getLectureRoom()
-            );
+            // === 🚫 강의실 중복 방지 로직 삭제 완료 (여러 명 가능) ===
+            // === 기존: isDuplicate() 제거함 ===
 
-            if (dup) {
-                return new BasicResponse("409", "해당 강의실은 이미 예약되어 있습니다.");
-            }
 
             // === 저장 ===
             repo.save(roomReservation);
@@ -196,7 +225,7 @@ public class ReservationService {
     }
 
     // ======================================================================================================
-    // 개인 예약 목록
+    // 개인 예약 목록 조회
     // ======================================================================================================
     public BasicResponse getReservationsByUser(String payload) {
         LocalDate today = LocalDate.now();
@@ -292,7 +321,6 @@ public class ReservationService {
     // 관리자: 삭제
     // ======================================================================================================
     public BasicResponse deleteRoomReservationFromManagement(String payload) {
-
         RoomReservation target = ReservationRepository.getInstance().findById(payload);
 
         if (target == null) {
@@ -316,7 +344,6 @@ public class ReservationService {
     // 관리자: 상태 승인
     // ======================================================================================================
     public BasicResponse changeRoomReservationStatus(String payload) {
-
         RoomReservation target = ReservationRepository.getInstance().findById(payload);
 
         if (target == null) {
