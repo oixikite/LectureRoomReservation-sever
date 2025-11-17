@@ -103,17 +103,29 @@ public class LectureService {
         return LectureRepository.getInstance().findRoomLectures(year, sem, building, floor, lectureroom);
     }
 
-    // 건물, 층, 강의실, 요일, 시간 정보가 모두 유효한지 확인
+    //[수정] 건물, 층, 강의실, 요일, 시간 정보가 유효한지 확인 (빈 문자열은 "전체"로 간주)
     private boolean isValidLectureForRoom(Lecture lec, String building, String floor, String room) {
-        return lec != null &&
-                building != null && building.equals(lec.getBuilding()) &&
-                floor != null && floor.equals(lec.getFloor()) &&
-                room != null && room.equals(lec.getLectureroom()) &&
-                lec.getDay() != null &&
-                lec.getStartTime() != null &&
-                lec.getEndTime() != null;
-    }
+        if (lec == null || building == null || !building.equals(lec.getBuilding())) {
+            return false;
+        }
+        if (lec.getDay() == null || lec.getStartTime() == null || lec.getEndTime() == null) {
+            return false;
+        }
 
+        // [FIX] floor가 비어있지 않고, 일치하지도 않으면 false
+        if (floor != null && !floor.isEmpty() && !floor.equals(lec.getFloor())) {
+            return false;
+        }
+
+        // [FIX] room이 비어있지 않고, 일치하지도 않으면 false
+        if (room != null && !room.isEmpty() && !room.equals(lec.getLectureroom())) {
+            return false;
+        }
+
+        // 모든 필터링을 통과
+        return true;
+    }
+    
     //[추가] 한글 및 영어 요일을 DayOfWeek Enum으로 변환하는 헬퍼 메서드
     private DayOfWeek convertToDayOfWeekEnum(String day) {
         if (day == null) return null;

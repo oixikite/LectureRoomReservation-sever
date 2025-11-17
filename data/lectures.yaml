@@ -1,3 +1,5 @@
+## YAML Template.수정
+#911호 강의실 - 완료
 lectures:
 - building: 정보관
   day: MONDAY
@@ -812,15 +814,4 @@ lectures:
   semester: FIRST
   startTime: '14:00'
   title: 데이터사이언스
-  year: 2025
-- building: 정보관
-  day: 일
-  endTime: '12:00'
-  floor: '9'
-  id: 2131212-12
-  lectureroom: '911'
-  professor: 테스트
-  semester: FIRST
-  startTime: 09:00
-  title: 추가
   year: 2025
