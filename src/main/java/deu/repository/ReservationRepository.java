@@ -13,7 +13,10 @@ import java.util.List;
 
 public class ReservationRepository {
 
-    private static final String FILE_PATH = System.getProperty("user.dir") + File.separator + "data" + File.separator + "reservations.yaml";
+    private static final String FILE_PATH =
+            System.getProperty("user.dir")
+                    + File.separator + "data"
+                    + File.separator + "reservations.yaml";
 
     @Getter
     private static final ReservationRepository instance = new ReservationRepository();
@@ -78,31 +81,29 @@ public class ReservationRepository {
                 .orElse(null);
     }
 
-    // 사용자 ID로 전체 예약 조회
-   // 사용자 ID로 전체 예약 조회 (대소문자 무시)
-public List<RoomReservation> findByUser(String userId) {
+    // 사용자 ID로 전체 예약 조회 (대소문자 무시)
+    public List<RoomReservation> findByUser(String userId) {
 
-    if (userId == null) return new ArrayList<>();
+        if (userId == null) return new ArrayList<>();
 
-    String target = userId.trim().toLowerCase();
+        String target = userId.trim().toLowerCase();
 
-    List<RoomReservation> results = new ArrayList<>();
-    for (RoomReservation r : roomReservationList) {
-        if (r.getNumber() != null &&
-            r.getNumber().trim().toLowerCase().equals(target)) {
-            results.add(r);
+        List<RoomReservation> results = new ArrayList<>();
+        for (RoomReservation r : roomReservationList) {
+            if (r.getNumber() != null &&
+                    r.getNumber().trim().toLowerCase().equals(target)) {
+                results.add(r);
+            }
         }
+        return results;
     }
-    return results;
-}
-
 
     // 모든 예약 반환
     public List<RoomReservation> findAll() {
         return new ArrayList<>(roomReservationList);
     }
 
-    // 중복 예약 체크
+    // (사용 안 하는 중복 체크)
     public boolean isDuplicate(String date, String startTime, String lectureRoom) {
         for (RoomReservation r : roomReservationList) {
             if (r.getDate().equals(date)
@@ -147,5 +148,73 @@ public List<RoomReservation> findByUser(String userId) {
     public void clear() {
         roomReservationList.clear();
         saveToFile();
+    }
+
+    // ==================================================================================================
+    // 🔥 백업 기능: reservations.yaml → 지정된 backup 파일로 복사
+    // ==================================================================================================
+    public boolean exportBackup(String backupFilePath) {
+        File source = new File(FILE_PATH);
+        File target = new File(backupFilePath);
+
+        try {
+            // 폴더 없으면 생성
+            if (target.getParentFile() != null) {
+                target.getParentFile().mkdirs();
+            }
+
+            try (InputStream in = new FileInputStream(source);
+                 OutputStream out = new FileOutputStream(target)) {
+
+                byte[] buffer = new byte[1024];
+                int length;
+
+                while ((length = in.read(buffer)) > 0) {
+                    out.write(buffer, 0, length);
+                }
+
+                System.out.println("[ReservationRepository] 백업 성공 → " + backupFilePath);
+                return true;
+            }
+
+        } catch (Exception e) {
+            System.err.println("[ReservationRepository] 백업 실패: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // ==================================================================================================
+    // 🔥 복구 기능: backup 파일 → reservations.yaml 덮어쓰기 + 메모리 재로딩
+    // ==================================================================================================
+    public boolean importBackup(String backupFilePath) {
+        File source = new File(backupFilePath);
+        File target = new File(FILE_PATH);
+
+        try {
+            if (!source.exists()) {
+                System.err.println("[ReservationRepository] 복구 실패: 백업 파일이 존재하지 않습니다.");
+                return false;
+            }
+
+            try (InputStream in = new FileInputStream(source);
+                 OutputStream out = new FileOutputStream(target)) {
+
+                byte[] buffer = new byte[1024];
+                int length;
+
+                while ((length = in.read(buffer)) > 0) {
+                    out.write(buffer, 0, length);
+                }
+            }
+
+            // 복구 후 메모리 재로딩
+            loadFromFile();
+            System.out.println("[ReservationRepository] 복구 성공 ← " + backupFilePath);
+            return true;
+
+        } catch (Exception e) {
+            System.err.println("[ReservationRepository] 복구 실패: " + e.getMessage());
+            return false;
+        }
     }
 }
