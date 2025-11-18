@@ -8,6 +8,8 @@ package deu.moniter;
  *
  * @author scq37
  */
+
+//인터페이스에 해당
 public interface ServerState {
-    
+    void log(String message);
 }

@@ -8,6 +8,15 @@ package deu.moniter;
  *
  * @author scq37
  */
-public class NormalState {
-    
+
+//일반 모드 - 일단은 에러만 출력하도록
+
+public class NormalState implements ServerState {
+    @Override
+    public void log(String message){
+        //[ERRor] 태그가 붙은 중요 매시지만 출력
+        if (message.startsWith("[ERROR]") || message.contains("Exception")) {
+            System.out.println(" " + message);
+        }
+    }
 }
