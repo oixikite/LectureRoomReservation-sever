@@ -5,11 +5,13 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.io.Serializable;
+import java.util.List; // List import 필요
 
 @Getter
 @Setter
 @NoArgsConstructor
 public class RoomReservationRequest implements Serializable {
+
     private String id;
     private String buildingName;
     private String floor;
@@ -23,9 +25,16 @@ public class RoomReservationRequest implements Serializable {
     private String number;
     private String status = "대기"; // 기본값 지정
 
+    // [필수] 누락된 필드 추가
+    private String purpose; // 사용 목적
+    private int accompanyingStudentCount; // 동반 학생 수
+    private List<AccompanyingStudent> accompanyingStudents; // 동반 학생 목록
+
     public RoomReservationRequest(String buildingName, String floor, String lectureRoom,
-                                  String title, String description, String date, String dayOfTheWeek,
-                                  String startTime, String endTime, String number) {
+            String title, String description, String date, String dayOfTheWeek,
+            String startTime, String endTime, String number,
+            // 생성자에도 추가 필드를 반영 (필요한 경우)
+            String purpose, int accompanyingStudentCount, List<AccompanyingStudent> accompanyingStudents) {
         this.buildingName = buildingName;
         this.floor = floor;
         this.lectureRoom = lectureRoom;
@@ -37,5 +46,10 @@ public class RoomReservationRequest implements Serializable {
         this.endTime = endTime;
         this.number = number;
         this.status = "대기";
+
+        // 추가된 필드 초기화
+        this.purpose = purpose;
+        this.accompanyingStudentCount = accompanyingStudentCount;
+        this.accompanyingStudents = accompanyingStudents;
     }
 }

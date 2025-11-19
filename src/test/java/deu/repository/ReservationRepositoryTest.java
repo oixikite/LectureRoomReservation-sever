@@ -24,20 +24,21 @@ public class ReservationRepositoryTest {
         repository.clear();
     }
 
+    // 헬퍼 메소드 수정: Builder 사용
     private RoomReservation createSampleReservation(String user, String date, String startTime, String room) {
-        RoomReservation res = new RoomReservation();
-        res.setNumber(user);
-        res.setDate(date);
-        res.setStartTime(startTime);
-        res.setLectureRoom(room);
-        res.setTitle("스터디 모임");
-        res.setDescription("시험 준비 스터디");
-        res.setBuildingName("정보관");
-        res.setFloor("9");
-        res.setEndTime("14:00");
-        res.setStatus("대기");
-        res.setDayOfTheWeek("FRIDAY");
-        return res;
+        return RoomReservation.builder()
+                .number(user)
+                .date(date)
+                .startTime(startTime)
+                .lectureRoom(room)
+                .title("스터디 모임")
+                .description("시험 준비 스터디")
+                .buildingName("정보관")
+                .floor("9")
+                .endTime("14:00")
+                .status("대기")
+                .dayOfTheWeek("FRIDAY")
+                .build();
     }
 
     @Test
