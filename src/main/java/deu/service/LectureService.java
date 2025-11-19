@@ -12,11 +12,13 @@ import java.util.List;
 
 public class LectureService {
 
-    // Singleton 인스턴스
+    // Singleton 인스턴스(static 인스턴스)
     private static final LectureService instance = new LectureService();
-
+    
+    //private 생성자
     private LectureService() {}
-
+    
+    //public 접근자
     public static LectureService getInstance() {
         return instance;
     }

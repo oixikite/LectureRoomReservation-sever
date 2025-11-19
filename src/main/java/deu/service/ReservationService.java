@@ -3,23 +3,28 @@ package deu.service;
 import deu.model.dto.request.data.reservation.DeleteRoomReservationRequest;
 import deu.model.dto.request.data.reservation.RoomReservationLocationRequest;
 import deu.model.dto.request.data.reservation.RoomReservationRequest;
+import deu.model.dto.response.BasicResponse;
+import deu.model.dto.response.NotificationDTO;
 import deu.model.entity.RoomReservation;
 import deu.repository.ReservationRepository;
-import deu.model.dto.response.BasicResponse;
+import deu.repository.RoomCapacityRepository;
+import deu.service.policy.ProfessorReservationPolicy;
+import deu.service.policy.ReservationPolicy;
+import deu.service.policy.StudentReservationPolicy;
 import lombok.Getter;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 public class ReservationService {
 
-    // 싱글톤 인스턴스
     @Getter
     private static final ReservationService instance = new ReservationService();
 
-    // [수정 1] 테스트가 가능하도록 Repository를 멤버 변수로 선언
+    // [Refactor] 테스트 용이성을 위해 Repository를 멤버 변수로 선언 (HEAD 반영)
     private ReservationRepository reservationRepository;
 
     private ReservationService() {
@@ -31,6 +36,7 @@ public class ReservationService {
     // 예약 신청
     public BasicResponse createRoomReservation(RoomReservationRequest payload) {
         try {
+            // [Refactor] Builder Pattern 사용 (HEAD 반영)
             RoomReservation roomReservation = RoomReservation.builder()
                     .buildingName(payload.getBuildingName())
                     .floor(payload.getFloor())
@@ -47,19 +53,89 @@ public class ReservationService {
                     .accompanyingStudents(payload.getAccompanyingStudents())
                     .build();
 
-            // [수정 2] 멤버 변수 사용
             ReservationRepository repo = this.reservationRepository;
 
+            // [Feature] 1. 학생/교수 정책 자동 선택 및 검증 (Remote 반영)
+            String number = payload.getNumber() == null ? "" : payload.getNumber().trim();
+            String lower = number.toLowerCase();
+            ReservationPolicy policy;
+
+            if (lower.startsWith("p")) {
+                policy = new ProfessorReservationPolicy();
+            } else if (lower.startsWith("s")) {
+                policy = new StudentReservationPolicy();
+            } else {
+                return new BasicResponse("400", "사용자 번호 형식이 올바르지 않습니다. (S**** / P****)");
+            }
+
+            try {
+                policy.validate(payload);
+            } catch (Exception ex) {
+                return new BasicResponse("403", ex.getMessage());
+            }
+
+            // [Feature] 2. 정원(capacity) 정책: 정원의 50% 초과 시 예약 불가 (Remote 반영)
+            try {
+                RoomCapacityRepository capacityRepo = RoomCapacityRepository.getInstance();
+                int capacity = capacityRepo.getCapacity(
+                        payload.getBuildingName(),
+                        payload.getFloor(),
+                        payload.getLectureRoom()
+                );
+
+                if (capacity > 0) {
+                    int limit = (int) Math.ceil(capacity * 0.5);
+
+                    List<RoomReservation> existing = repo.findAll().stream()
+                            .filter(r -> r.getBuildingName().equals(payload.getBuildingName()))
+                            .filter(r -> r.getFloor().equals(payload.getFloor()))
+                            .filter(r -> r.getLectureRoom().equals(payload.getLectureRoom()))
+                            .filter(r -> r.getDate().equals(payload.getDate()))
+                            .filter(r -> r.getStartTime().equals(payload.getStartTime()))
+                            .filter(r -> !"삭제됨".equals(r.getStatus()))
+                            .toList();
+
+                    if (existing.size() >= limit) {
+                        return new BasicResponse("403", "정원의 50%(" + limit + "명)를 초과하여 예약할 수 없습니다.");
+                    }
+                }
+            } catch (Exception ex) {
+                return new BasicResponse("500", "정원 검증 오류: " + ex.getMessage());
+            }
+
+            // [Feature] 3. 하루 시간 제한 검사 (Remote 반영)
+            List<RoomReservation> todays = repo.findByUser(number).stream()
+                    .filter(r -> r.getDate().equals(payload.getDate()))
+                    .toList();
+
+            int usedMinutes = 0;
+            for (RoomReservation r : todays) {
+                LocalTime s = LocalTime.parse(r.getStartTime());
+                LocalTime e = LocalTime.parse(r.getEndTime());
+                usedMinutes += (int) ChronoUnit.MINUTES.between(s, e);
+            }
+
+            int newMinutes = (int) ChronoUnit.MINUTES.between(
+                    LocalTime.parse(payload.getStartTime()),
+                    LocalTime.parse(payload.getEndTime())
+            );
+
+            int limitMinutes = lower.startsWith("p") ? 180 : 120;
+            if (usedMinutes + newMinutes > limitMinutes) {
+                return new BasicResponse("403", lower.startsWith("p")
+                        ? "교수님은 하루 최대 3시간까지 예약 가능합니다."
+                        : "학생은 하루 최대 2시간까지 예약 가능합니다.");
+            }
+
+            // [Feature] 4. 7일간 최대 5회 검사 (Remote 반영)
             LocalDate today = LocalDate.now();
             LocalDate maxDate = today.plusDays(6);
 
-            List<RoomReservation> userReservations = repo.findByUser(payload.getNumber());
-
-            long countWithin7Days = userReservations.stream()
+            long countWithin7Days = repo.findByUser(number).stream()
                     .filter(r -> {
                         try {
-                            LocalDate date = LocalDate.parse(r.getDate());
-                            return !date.isBefore(today) && !date.isAfter(maxDate);
+                            LocalDate d = LocalDate.parse(r.getDate());
+                            return !d.isBefore(today) && !d.isAfter(maxDate);
                         } catch (Exception e) {
                             return false;
                         }
@@ -67,28 +143,20 @@ public class ReservationService {
                     .count();
 
             if (countWithin7Days >= 5) {
-                return new BasicResponse("403", "오늘부터 7일 간 최대 5개의 예약만 가능합니다.");
+                return new BasicResponse("403", "오늘부터 7일간 최대 5회까지만 예약 가능합니다.");
             }
 
-            for (RoomReservation r : userReservations) {
+            // [Feature] 5. 동일 사용자 중복 예약 방지 (Remote 반영)
+            for (RoomReservation r : repo.findByUser(number)) {
                 if (r.getDate().equals(payload.getDate())
                         && r.getStartTime().equals(payload.getStartTime())) {
-                    return new BasicResponse("409", "같은 시간대에 이미 예약이 존재합니다.");
+                    return new BasicResponse("409", "이미 해당 시간에 본인의 예약이 존재합니다.");
                 }
             }
 
-            boolean isDup = repo.isDuplicate(
-                    roomReservation.getDate(),
-                    roomReservation.getStartTime(),
-                    roomReservation.getLectureRoom()
-            );
-
-            if (isDup) {
-                return new BasicResponse("409", "해당 시간에 다른 예약이 존재합니다.");
-            }
-
+            // (강의실 중복 방지 로직은 Remote 정책에 따라 제거됨)
             repo.save(roomReservation);
-            repo.saveToFile(); // [수정 3] 파일 저장 추가
+            repo.saveToFile(); // [Refactor] 파일 저장 명시
             return new BasicResponse("200", "예약이 완료되었습니다.");
 
         } catch (Exception e) {
@@ -97,7 +165,7 @@ public class ReservationService {
         }
     }
 
-    // 개인별 예약 삭제
+    // 개인별 예약 삭제 (HEAD 로직 유지)
     public BasicResponse deleteRoomReservationFromUser(DeleteRoomReservationRequest payload) {
         ReservationRepository repo = this.reservationRepository;
         RoomReservation target = repo.findById(payload.roomReservationId);
@@ -111,32 +179,33 @@ public class ReservationService {
         }
 
         repo.deleteById(payload.roomReservationId);
-        repo.saveToFile(); // [수정 3] 파일 저장 추가
+        repo.saveToFile();
         return new BasicResponse("200", "예약이 삭제되었습니다.");
     }
 
     // 개인별 주간 예약 조회
     public BasicResponse weekRoomReservationByUserNumber(String payload) {
         RoomReservation[][] schedule = new RoomReservation[7][13];
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
         LocalDate today = LocalDate.now();
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-        List<RoomReservation> reservations = this.reservationRepository.findByUser(payload).stream()
+        // [Refactor] 멤버 변수 사용 (HEAD) + 로직 (Remote) 병합
+        List<RoomReservation> list = this.reservationRepository.findByUser(payload).stream()
                 .filter(r -> {
                     try {
-                        LocalDate date = LocalDate.parse(r.getDate(), formatter);
-                        return !date.isBefore(today) && !date.isAfter(today.plusDays(6));
+                        LocalDate d = LocalDate.parse(r.getDate(), fmt);
+                        return !d.isBefore(today) && !d.isAfter(today.plusDays(6));
                     } catch (Exception e) {
                         return false;
                     }
                 }).toList();
 
-        for (RoomReservation r : reservations) {
+        for (RoomReservation r : list) {
             try {
-                int dayIndex = (int) ChronoUnit.DAYS.between(today, LocalDate.parse(r.getDate(), formatter));
-                int periodIndex = Integer.parseInt(r.getStartTime().split(":")[0]) - 9;
-                if (dayIndex >= 0 && dayIndex < 7 && periodIndex >= 0 && periodIndex < 13) {
-                    schedule[dayIndex][periodIndex] = r;
+                int di = (int) ChronoUnit.DAYS.between(today, LocalDate.parse(r.getDate(), fmt));
+                int pi = Integer.parseInt(r.getStartTime().split(":")[0]) - 9;
+                if (di >= 0 && di < 7 && pi >= 0 && pi < 13) {
+                    schedule[di][pi] = r;
                 }
             } catch (Exception ignored) {
             }
@@ -147,23 +216,21 @@ public class ReservationService {
 
     // 사용자별 예약 리스트 조회
     public BasicResponse getReservationsByUser(String payload) {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
         LocalDate today = LocalDate.now();
-        LocalDate endDate = today.plusDays(6);
+        LocalDate end = today.plusDays(6);
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-        List<RoomReservation> reservations = this.reservationRepository
-                .findByUser(payload).stream()
+        List<RoomReservation> list = this.reservationRepository.findByUser(payload).stream()
                 .filter(r -> {
                     try {
-                        LocalDate date = LocalDate.parse(r.getDate(), formatter);
-                        return !date.isBefore(today) && !date.isAfter(endDate);
+                        LocalDate d = LocalDate.parse(r.getDate(), fmt);
+                        return !d.isBefore(today) && !d.isAfter(end);
                     } catch (Exception e) {
                         return false;
                     }
-                })
-                .toList();
+                }).toList();
 
-        return new BasicResponse("200", reservations);
+        return new BasicResponse("200", list);
     }
 
     // 통합 관점 ==========================================================================================================
@@ -171,13 +238,13 @@ public class ReservationService {
     public BasicResponse modifyRoomReservation(RoomReservationRequest payload) {
         try {
             ReservationRepository repo = this.reservationRepository;
-
             RoomReservation original = repo.findById(payload.getId());
+
             if (original == null) {
                 return new BasicResponse("404", "예약을 찾을 수 없습니다.");
             }
 
-            // Builder 패턴을 사용해 새 객체 생성
+            // [Refactor] Builder 패턴으로 새 객체 생성 (HEAD 반영)
             RoomReservation modifiedReservation = original.toBuilder()
                     .buildingName(payload.getBuildingName())
                     .floor(payload.getFloor())
@@ -194,40 +261,47 @@ public class ReservationService {
                     .build();
 
             repo.save(modifiedReservation);
-            repo.saveToFile(); // [수정 3] 파일 저장 추가
+
+            // [Feature] 알림 저장 (Remote 반영)
+            String title = "예약 수정";
+            String message = String.format("[%s, %s] %s~%s 예약이 (관리자에 의해) 수정되었습니다.",
+                    original.getLectureRoom(), original.getDate(), original.getStartTime(), original.getEndTime());
+            saveNotification(original, title, message);
+
+            repo.saveToFile();
 
             return new BasicResponse("200", "예약이 수정되었습니다.");
         } catch (Exception e) {
             e.printStackTrace();
-            return new BasicResponse("500", "예약 수정 중 오류가 발생했습니다: " + e.getMessage());
+            return new BasicResponse("500", "예약 수정 중 오류 발생: " + e.getMessage());
         }
     }
 
     // 건물 강의실별 주간 예약 조회
     public BasicResponse weekRoomReservationByLectureroom(RoomReservationLocationRequest payload) {
         RoomReservation[][] schedule = new RoomReservation[7][13];
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
         LocalDate today = LocalDate.now();
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-        List<RoomReservation> reservations = this.reservationRepository.findAll().stream()
+        List<RoomReservation> list = this.reservationRepository.findAll().stream()
                 .filter(r -> r.getBuildingName().equals(payload.building)
                 && r.getFloor().equals(payload.floor)
                 && r.getLectureRoom().equals(payload.lectureroom))
                 .filter(r -> {
                     try {
-                        LocalDate date = LocalDate.parse(r.getDate(), formatter);
-                        return !date.isBefore(today) && !date.isAfter(today.plusDays(6));
+                        LocalDate d = LocalDate.parse(r.getDate(), fmt);
+                        return !d.isBefore(today) && !d.isAfter(today.plusDays(6));
                     } catch (Exception e) {
                         return false;
                     }
                 }).toList();
 
-        for (RoomReservation r : reservations) {
+        for (RoomReservation r : list) {
             try {
-                int dayIndex = (int) ChronoUnit.DAYS.between(today, LocalDate.parse(r.getDate(), formatter));
-                int periodIndex = Integer.parseInt(r.getStartTime().split(":")[0]) - 9;
-                if (dayIndex >= 0 && dayIndex < 7 && periodIndex >= 0 && periodIndex < 13) {
-                    schedule[dayIndex][periodIndex] = r;
+                int di = (int) ChronoUnit.DAYS.between(today, LocalDate.parse(r.getDate(), fmt));
+                int pi = Integer.parseInt(r.getStartTime().split(":")[0]) - 9;
+                if (di >= 0 && di < 7 && pi >= 0 && pi < 13) {
+                    schedule[di][pi] = r;
                 }
             } catch (Exception ignored) {
             }
@@ -237,38 +311,91 @@ public class ReservationService {
     }
 
     // 관리자 관점 ========================================================================================================
-    // 관리자 예약 삭제
+    // 관리자 예약 삭제 (Soft Delete & Notification - Remote 반영)
     public BasicResponse deleteRoomReservationFromManagement(String payload) {
-        boolean deleted = this.reservationRepository.deleteById(payload);
-        if (deleted) {
-            this.reservationRepository.saveToFile();
-            return new BasicResponse("200", "예약이 삭제되었습니다.");
-        }
-        return new BasicResponse("404", "예약을 찾을 수 없습니다.");
-    }
-
-    // 예약 상태 변경
-    public BasicResponse changeRoomReservationStatus(String payload) {
         RoomReservation target = this.reservationRepository.findById(payload);
+
         if (target == null) {
             return new BasicResponse("404", "예약을 찾을 수 없습니다.");
         }
 
+        // [Feature] Soft Delete 및 알림 (Remote 기능 우선)
+        // (Builder를 써도 되지만, 상태 변경만 필요하므로 여기선 기존 객체를 변경하여 저장하거나 toBuilder 사용)
+        RoomReservation deletedReservation = target.toBuilder()
+                .status("삭제됨")
+                .build();
+
+        this.reservationRepository.save(deletedReservation);
+
+        // 알림 저장
+        String title = "예약 취소";
+        String message = String.format("[%s, %s] %s~%s 예약이 (관리자에 의해) 취소되었습니다.",
+                target.getLectureRoom(), target.getDate(), target.getStartTime(), target.getEndTime());
+        saveNotification(target, title, message);
+
+        this.reservationRepository.saveToFile();
+        return new BasicResponse("200", "예약이 '삭제됨' 상태로 변경되었습니다.");
+    }
+
+    // 예약 상태 변경 (승인)
+    public BasicResponse changeRoomReservationStatus(String payload) {
+        RoomReservation target = this.reservationRepository.findById(payload);
+
+        if (target == null) {
+            return new BasicResponse("404", "예약을 찾을 수 없습니다.");
+        }
+
+        if ("승인".equals(target.getStatus())) {
+            return new BasicResponse("409", "이미 승인된 예약입니다.");
+        }
+
+        // [Refactor] Builder 사용 (HEAD)
         RoomReservation approvedReservation = target.toBuilder()
                 .status("승인")
                 .build();
 
         this.reservationRepository.save(approvedReservation);
-        this.reservationRepository.saveToFile(); // [수정 3] 파일 저장 추가
-        return new BasicResponse("200", "예약 상태가 승인로 변경되었습니다.");
+
+        // [Feature] 알림 저장 (Remote)
+        String title = "예약 승인";
+        String message = String.format("[%s, %s] %s~%s 예약이 승인되었습니다.",
+                target.getLectureRoom(), target.getDate(), target.getStartTime(), target.getEndTime());
+        saveNotification(target, title, message);
+
+        this.reservationRepository.saveToFile();
+
+        return new BasicResponse("200", "예약 상태가 승인으로 변경되었습니다.");
     }
 
     // 예약 상태가 "대기" 인 모든 예약 내역 반환
     public BasicResponse findAllRoomReservation() {
-        List<RoomReservation> result = this.reservationRepository.findAll().stream()
+        List<RoomReservation> list = this.reservationRepository.findAll().stream()
                 .filter(r -> "대기".equals(r.getStatus()))
                 .toList();
 
-        return new BasicResponse("200", result);
+        return new BasicResponse("200", list);
+    }
+
+    // ======================================================================================================
+    // 알림 저장 공통 메서드 (Remote 반영)
+    // ======================================================================================================
+    private void saveNotification(RoomReservation reservation, String title, String message) {
+        try {
+            String studentId = reservation.getNumber();
+            if (studentId == null || studentId.isBlank()) {
+                return;
+            }
+
+            NotificationDTO notification = new NotificationDTO(
+                    title,
+                    message,
+                    System.currentTimeMillis()
+            );
+
+            NotificationService.getInstance().addNotification(studentId, notification);
+
+        } catch (Exception e) {
+            System.err.println("[ReservationService] 알림 저장 오류: " + e.getMessage());
+        }
     }
 }
