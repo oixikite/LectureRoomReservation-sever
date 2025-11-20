@@ -169,18 +169,35 @@ public class ReservationService {
     public BasicResponse deleteRoomReservationFromUser(DeleteRoomReservationRequest payload) {
         ReservationRepository repo = this.reservationRepository;
         RoomReservation target = repo.findById(payload.roomReservationId);
-
+        
+        //예약 존재 여부 확인
         if (target == null) {
             return new BasicResponse("404", "예약을 찾을 수 없습니다.");
         }
-
+        
+        //본인 확인
         if (!target.getNumber().equals(payload.number)) {
             return new BasicResponse("403", "본인의 예약만 삭제할 수 있습니다.");
         }
-
-        repo.deleteById(payload.roomReservationId);
+        
+        //이미 취소된 예약인지 확인
+        if ("취소".equals(target.getStatus())) {
+             return new BasicResponse("409", "이미 취소된 예약입니다.");
+        }
+        
+        //상태를 '취소'로 변경하여 새 객체 생성 (Builder 사용)
+        RoomReservation cancelledReservation = target.toBuilder()
+                .status("취소")
+                .build();
+        
+        //저장 (Repository의 save는 ID가 같으면 덮어쓰도록 수정됨)
+        repo.save(cancelledReservation);
         repo.saveToFile();
+
+//        repo.deleteById(payload.roomReservationId);
+//        repo.saveToFile();
         return new BasicResponse("200", "예약이 삭제되었습니다.");
+        
     }
 
     // 개인별 주간 예약 조회
