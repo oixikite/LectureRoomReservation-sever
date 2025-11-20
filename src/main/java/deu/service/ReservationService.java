@@ -165,10 +165,10 @@ public class ReservationService {
         }
     }
 
-    // 개인별 예약 삭제 (HEAD 로직 유지)
+    // 개인별 예약 취소 (HEAD 로직 유지)
     public BasicResponse deleteRoomReservationFromUser(DeleteRoomReservationRequest payload) {
         ReservationRepository repo = this.reservationRepository;
-        RoomReservation target = repo.findById(payload.roomReservationId);
+        RoomReservation target = repo.findById(payload.getRoomReservationId());
         
         //예약 존재 여부 확인
         if (target == null) {
@@ -176,8 +176,8 @@ public class ReservationService {
         }
         
         //본인 확인
-        if (!target.getNumber().equals(payload.number)) {
-            return new BasicResponse("403", "본인의 예약만 삭제할 수 있습니다.");
+        if (!target.getNumber().equals(payload.getNumber())) {
+            return new BasicResponse("403", "본인의 예약만 취소할 수 있습니다.");
         }
         
         //이미 취소된 예약인지 확인
@@ -187,7 +187,8 @@ public class ReservationService {
         
         //상태를 '취소'로 변경하여 새 객체 생성 (Builder 사용)
         RoomReservation cancelledReservation = target.toBuilder()
-                .status("취소")
+                .status("취소됨")  // 상태 변경
+                .cancellationReason(payload.getReason()) // 사유 저장
                 .build();
         
         //저장 (Repository의 save는 ID가 같으면 덮어쓰도록 수정됨)
@@ -200,7 +201,7 @@ public class ReservationService {
         
     }
 
-    // 개인별 주간 예약 조회
+    // [수정] 개인별 주간 예약 조회 (취소된 예약 제외)
     public BasicResponse weekRoomReservationByUserNumber(String payload) {
         RoomReservation[][] schedule = new RoomReservation[7][13];
         LocalDate today = LocalDate.now();
@@ -215,7 +216,10 @@ public class ReservationService {
                     } catch (Exception e) {
                         return false;
                     }
-                }).toList();
+                })
+                // [수정] 취소/삭제된 예약은 조회에서 제외
+                .filter(r -> !"삭제됨".equals(r.getStatus()) && !"취소됨".equals(r.getStatus()))
+                .toList();
 
         for (RoomReservation r : list) {
             try {
@@ -231,7 +235,7 @@ public class ReservationService {
         return new BasicResponse("200", schedule);
     }
 
-    // 사용자별 예약 리스트 조회
+    // [수정] 사용자별 예약 리스트 조회 (취소된 예약 제외)
     public BasicResponse getReservationsByUser(String payload) {
         LocalDate today = LocalDate.now();
         LocalDate end = today.plusDays(6);
@@ -245,7 +249,10 @@ public class ReservationService {
                     } catch (Exception e) {
                         return false;
                     }
-                }).toList();
+                })
+                // [수정] 취소/삭제된 예약은 조회에서 제외
+                .filter(r -> !"삭제됨".equals(r.getStatus()) && !"취소됨".equals(r.getStatus()))
+                .toList();
 
         return new BasicResponse("200", list);
     }
@@ -311,7 +318,10 @@ public class ReservationService {
                     } catch (Exception e) {
                         return false;
                     }
-                }).toList();
+                })
+                // [수정] 취소/삭제된 예약은 조회에서 제외
+                .filter(r -> !"삭제됨".equals(r.getStatus()) && !"취소됨".equals(r.getStatus()))
+                .toList();
 
         for (RoomReservation r : list) {
             try {

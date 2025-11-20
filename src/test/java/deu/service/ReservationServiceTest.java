@@ -116,12 +116,18 @@ public class ReservationServiceTest {
                 .build();
 
         when(mockRepo.findById("resv123")).thenReturn(r);
-        when(mockRepo.deleteById("resv123")).thenReturn(true);
 
-        DeleteRoomReservationRequest req = new DeleteRoomReservationRequest("S123", "resv123");
+        // [수정] 사유 포함된 DTO 사용
+        DeleteRoomReservationRequest req = new DeleteRoomReservationRequest("S123", "resv123", "단순 변심");
         BasicResponse response = service.deleteRoomReservationFromUser(req);
 
         assertEquals("200", response.code);
+        
+        // [검증] 상태가 '취소됨'으로 변경되고 저장되었는지 확인
+        ArgumentCaptor<RoomReservation> captor = ArgumentCaptor.forClass(RoomReservation.class);
+        verify(mockRepo).save(captor.capture());
+        assertEquals("취소됨", captor.getValue().getStatus());
+        
         verify(mockRepo).saveToFile();
     }
 
@@ -135,7 +141,8 @@ public class ReservationServiceTest {
 
         when(mockRepo.findById("resv123")).thenReturn(r);
 
-        DeleteRoomReservationRequest req = new DeleteRoomReservationRequest("S123", "resv123");
+        // [수정] DTO 사용
+        DeleteRoomReservationRequest req = new DeleteRoomReservationRequest("S123", "resv123", "취소 시도");
         BasicResponse response = service.deleteRoomReservationFromUser(req);
 
         assertEquals("403", response.code);
@@ -146,7 +153,7 @@ public class ReservationServiceTest {
     void testDeleteRoomReservationNotFound() {
         when(mockRepo.findById("resv123")).thenReturn(null);
 
-        DeleteRoomReservationRequest req = new DeleteRoomReservationRequest("S123", "resv123");
+        DeleteRoomReservationRequest req = new DeleteRoomReservationRequest("S123", "resv123", "취소");
         BasicResponse response = service.deleteRoomReservationFromUser(req);
 
         assertEquals("404", response.code);
