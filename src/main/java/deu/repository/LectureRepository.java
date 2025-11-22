@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Collections;
 
 /**
  * 강의 정보를 YAML 파일로 관리하는 저장소 클래스
@@ -30,8 +31,8 @@ public class LectureRepository {
 
     // 강의 리스트(기존)
     //private final List<Lecture> lectureList = new ArrayList<>();
-    //동시성 지원 리스트로 변경 (읽기 성능 최적화 및 반복문 에러 방지)
-    private final List<Lecture> lectureList = new CopyOnWriteArrayList<>();
+    //동시성 처리를 위해 Synchronized List , Thread-Safe 리스트 사용
+    private final List<Lecture> lectureList = Collections.synchronizedList(new ArrayList<>());
     
     //연도,학기 기본값 설정
     private static final int DEFAULT_YEAR = 2025;
@@ -70,7 +71,7 @@ public class LectureRepository {
     }
 
     // 파일 저장
-    private void saveAllToFile() {
+    private synchronized void saveAllToFile() {
         File file = new File(FILE_PATH);
         File parentDir = file.getParentFile();
 
@@ -95,7 +96,7 @@ public class LectureRepository {
     }
 
     // 파일에서 불러오기
-    private void loadAllFromFile() {
+    private synchronized void loadAllFromFile() {
         File file = new File(FILE_PATH);
 
         if (!file.exists()) {
@@ -173,8 +174,10 @@ public class LectureRepository {
         if (lecture.getYear() == null || lecture.getYear() == 0) lecture.setYear(DEFAULT_YEAR);
         if (lecture.getSemester() == null) lecture.setSemester(DEFAULT_SEMESTER);
 
-        deleteById(lecture.getId());
-        lectureList.add(lecture);
+        synchronized (lectureList) {
+            deleteByIdInternal(lecture.getId()); // 내부 삭제 메서드 호출
+            lectureList.add(lecture);
+        }
         saveAllToFile();
         return "200";
     }
@@ -182,28 +185,40 @@ public class LectureRepository {
 
     // 강의 삭제
     public synchronized String deleteById(String id) {
-        boolean removed = lectureList.removeIf(l -> l.getId().equals(id));
-        saveAllToFile();
-        return removed ? "200" : "404";
+        boolean removed = deleteByIdInternal(id);
+        if (removed) {
+            saveAllToFile();
+            return "200";
+        }
+        return "404";
+    }
+    
+    // 내부적으로만 쓰는 삭제 로직 (파일 저장은 안 함)
+    private boolean deleteByIdInternal(String id) {
+        synchronized (lectureList) {
+            return lectureList.removeIf(l -> l.getId().equals(id));
+        }
     }
 
     // 강의 존재 여부
-    public String existsById(String id) {
+    public synchronized String existsById(String id) {
         return lectureList.stream().anyMatch(l -> l.getId().equals(id)) ? "200" : "404";
     }
 
     // 강의 ID로 조회
-    public Optional<Lecture> findById(String id) {
+    public synchronized Optional<Lecture> findById(String id) {
         return lectureList.stream().filter(l -> l.getId().equals(id)).findFirst();
     }
 
     // 전체 강의 리스트 반환. 읽기 작업은 synchronized 없이 수행 (CopyOnWriteArrayList 덕분에 안전하고 빠름)
-    public List<Lecture> findAll() {
+    public synchronized List<Lecture> findAll() {
+        synchronized (lectureList) {
         return new ArrayList<>(lectureList);
+        }
     }
 
     // 강의명 + 교수명으로 ID 조회
-    public Optional<String> findIdByLectureNameAndProfessor(String title, String professor) {
+    public synchronized Optional<String> findIdByLectureNameAndProfessor(String title, String professor) {
         return lectureList.stream()
                 .filter(l -> l.getTitle().equals(title) && l.getProfessor().equals(professor))
                 .map(Lecture::getId)
@@ -211,7 +226,7 @@ public class LectureRepository {
     }
     
     //특정 학년도.학기 기반 조회 및 검증
-    public List<Lecture> findAllByYearAndSemester(int year, Semester semester) {
+    public synchronized List<Lecture> findAllByYearAndSemester(int year, Semester semester) {
     List<Lecture> result = new ArrayList<>();
     for (Lecture l : lectureList) {
         if (l.getYear() == year && l.getSemester() == semester) {
@@ -221,7 +236,7 @@ public class LectureRepository {
     return result;
 }
     //건물/층/강의실 + 학년도/학기 필터 조회
-    public List<Lecture> findRoomLectures(int year, Semester semester,
+    public synchronized List<Lecture> findRoomLectures(int year, Semester semester,
                                       String building, String floor, String lectureroom) {
     List<Lecture> result = new ArrayList<>();
     for (Lecture l : lectureList) {
@@ -235,7 +250,7 @@ public class LectureRepository {
     return result;
 }
     
-public boolean hasTimeConflict(Lecture newLecture) {
+public synchronized boolean hasTimeConflict(Lecture newLecture) {
 
         // 문제점 발생 원인을 찾기 위한 전달 받은 값 출력
         System.out.println("\n--- 강의실 중복 검증 시작 ---");
@@ -280,6 +295,7 @@ public boolean hasTimeConflict(Lecture newLecture) {
                         ", 강의실: " + l.getBuilding() + " " + l.getLectureroom() +
                         ", 요일: " + l.getDay());
 
+                // ============ 불일치 로그 출력용 =========================
 //                System.out.println("    --- 불일치 세부 원인 ---");
 //                if (!lYearStr.equals(newYearStr)) System.out.println("    - 원인: 년도 불일치 (" + lYearStr + " != " + newYearStr + ")");
 //                if (!l.getSemester().equals(newLecture.getSemester())) System.out.println("    - 원인: 학기 불일치");
@@ -291,6 +307,7 @@ public boolean hasTimeConflict(Lecture newLecture) {
 //                    System.out.println("     - 원인: 요일 불일치 (" + l.getDay() + " != " + newLecture.getDay() + ")");
 //                }
 //                System.out.println("--------------------------");
+                // ==========================================================
                 
                 continue;
             }
