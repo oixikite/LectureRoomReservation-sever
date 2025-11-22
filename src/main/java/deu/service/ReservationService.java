@@ -149,6 +149,9 @@ public class ReservationService {
 
             // [Feature] 5. 동일 사용자 중복 예약 방지 (Remote 반영)
             for (RoomReservation r : repo.findByUser(number)) {
+                if ("취소됨".equals(r.getStatus()) || "삭제됨".equals(r.getStatus())) {
+                     continue;
+                }
                 if (r.getDate().equals(payload.getDate())
                         && r.getStartTime().equals(payload.getStartTime())) {
                     return new BasicResponse("409", "이미 해당 시간에 본인의 예약이 존재합니다.");
