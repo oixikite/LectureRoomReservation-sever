@@ -140,6 +140,7 @@ public class ReservationService {
                             return false;
                         }
                     })
+                    .filter(r -> !"삭제됨".equals(r.getStatus()) && !"취소됨".equals(r.getStatus()))
                     .count();
 
             if (countWithin7Days >= 5) {
@@ -339,8 +340,9 @@ public class ReservationService {
 
     // 관리자 관점 ========================================================================================================
     // 관리자 예약 삭제 (Soft Delete & Notification - Remote 반영)
-    public BasicResponse deleteRoomReservationFromManagement(String payload) {
-        RoomReservation target = this.reservationRepository.findById(payload);
+    public BasicResponse deleteRoomReservationFromManagement(DeleteRoomReservationRequest payload) {
+        
+        RoomReservation target = this.reservationRepository.findById(payload.getRoomReservationId());
 
         if (target == null) {
             return new BasicResponse("404", "예약을 찾을 수 없습니다.");

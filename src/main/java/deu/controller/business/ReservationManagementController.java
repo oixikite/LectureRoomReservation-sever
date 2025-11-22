@@ -1,5 +1,6 @@
 package deu.controller.business;
 
+import deu.model.dto.request.data.reservation.DeleteRoomReservationRequest;
 import deu.model.dto.request.data.reservation.RoomReservationRequest;
 import deu.model.dto.response.BasicResponse;
 import deu.model.entity.RoomReservation;
@@ -21,7 +22,7 @@ public class ReservationManagementController {
     }
 
     // 관리자 예약 삭제
-    public BasicResponse handleDeleteRoomReservation(String payload) {
+    public BasicResponse handleDeleteRoomReservation(DeleteRoomReservationRequest payload) {
         return reservationService.deleteRoomReservationFromManagement(payload);
     }
 
