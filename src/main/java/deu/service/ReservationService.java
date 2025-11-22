@@ -154,7 +154,30 @@ public class ReservationService {
                     return new BasicResponse("409", "이미 해당 시간에 본인의 예약이 존재합니다.");
                 }
             }
+           // [Feature] 5-1. 세미나/보강 목적 예약 시 교수 기존 예약 여부 검사 (Builder Pattern 적용)
+            try {
+            SeminarReservationRuleBuilder
+            .withRepository(repo)
+            .buildingName(payload.getBuildingName())
+            .floor(payload.getFloor())
+            .lectureRoom(payload.getLectureRoom())
+            .date(payload.getDate())
+            .startTime(payload.getStartTime())
+            .purpose(payload.getPurpose())
+            .requesterNumber(number)
+            .validate();
+        } catch (IllegalStateException ex) {
+             return new BasicResponse("403", ex.getMessage());
+        }
 
+
+        // (강의실 중복 방지 로직은 Remote 정책에 따라 제거됨)
+        repo.save(roomReservation);
+        repo.saveToFile(); // [Refactor] 파일 저장 명시
+            
+            
+            
+            
             // (강의실 중복 방지 로직은 Remote 정책에 따라 제거됨)
             repo.save(roomReservation);
             repo.saveToFile(); // [Refactor] 파일 저장 명시
@@ -427,4 +450,113 @@ public class ReservationService {
             System.err.println("[ReservationService] 알림 저장 오류: " + e.getMessage());
         }
     }
+        // ======================================================================================================
+    // 세미나/보강 목적 예약 제한 규칙 Builder
+    //   - 사용자가 세미나/보강(purpose)에 체크/입력한 경우에만 동작
+    //   - 동일 시간, 동일 강의실에 '교수(P****)' 계정이 만든 기존 예약이 있으면 예외 발생
+    // ======================================================================================================
+    private static class SeminarReservationRuleBuilder {
+
+        private final ReservationRepository repo;
+        private String buildingName;
+        private String floor;
+        private String lectureRoom;
+        private String date;
+        private String startTime;
+        private String purpose;
+        private String requesterNumber;
+
+        private SeminarReservationRuleBuilder(ReservationRepository repo) {
+            this.repo = repo;
+        }
+
+        public static SeminarReservationRuleBuilder withRepository(ReservationRepository repo) {
+            return new SeminarReservationRuleBuilder(repo);
+        }
+
+        public SeminarReservationRuleBuilder buildingName(String buildingName) {
+            this.buildingName = buildingName;
+            return this;
+        }
+
+        public SeminarReservationRuleBuilder floor(String floor) {
+            this.floor = floor;
+            return this;
+        }
+
+        public SeminarReservationRuleBuilder lectureRoom(String lectureRoom) {
+            this.lectureRoom = lectureRoom;
+            return this;
+        }
+
+        public SeminarReservationRuleBuilder date(String date) {
+            this.date = date;
+            return this;
+        }
+
+        public SeminarReservationRuleBuilder startTime(String startTime) {
+            this.startTime = startTime;
+            return this;
+        }
+
+        public SeminarReservationRuleBuilder purpose(String purpose) {
+            this.purpose = purpose;
+            return this;
+        }
+
+        public SeminarReservationRuleBuilder requesterNumber(String requesterNumber) {
+            this.requesterNumber = requesterNumber;
+            return this;
+        }
+
+        /**
+         * 세미나/보강 목적일 때만 유효성 검사를 수행한다.
+         * - purpose에 "세미나" 또는 "보강" 문자열이 포함되어 있을 때 적용
+         * - 동일 시간대에 교수 번호(P****)로 생성된 기존 예약이 있으면 IllegalStateException 발생
+         */
+        public void validate() {
+            if (!isSeminarOrMakeupPurpose(purpose)) {
+                // 일반 목적이면 이 규칙은 건너뜀
+                return;
+            }
+
+            for (RoomReservation existing : repo.findAll()) {
+                if (!equalsOrNullSafe(buildingName, existing.getBuildingName())) continue;
+                if (!equalsOrNullSafe(floor, existing.getFloor())) continue;
+                if (!equalsOrNullSafe(lectureRoom, existing.getLectureRoom())) continue;
+                if (!equalsOrNullSafe(date, existing.getDate())) continue;
+                if (!equalsOrNullSafe(startTime, existing.getStartTime())) continue;
+                if ("삭제됨".equals(existing.getStatus())) continue;
+
+                String existingNumber = existing.getNumber();
+                if (existingNumber == null) {
+                    continue;
+                }
+                String lower = existingNumber.trim().toLowerCase();
+                if (lower.startsWith("p")) {
+                    // 교수 계정으로 된 기존 예약이 있으면 세미나/보강 예약 차단
+                    throw new IllegalStateException(
+                            "해당 시간에는 교수님의 기존 예약이 있어 세미나/보강 목적으로 예약할 수 없습니다."
+                    );
+                }
+            }
+        }
+
+        private boolean equalsOrNullSafe(String a, String b) {
+            if (a == null) return b == null;
+            return a.equals(b);
+        }
+    }
+
+    /**
+     * 사용 목적 문자열이 세미나/보강인지 판별하는 유틸 메서드
+     */
+    private static boolean isSeminarOrMakeupPurpose(String purpose) {
+        if (purpose == null) return false;
+        String p = purpose.trim();
+        if (p.isEmpty()) return false;
+        // 한글 그대로 포함 여부만 체크
+        return p.contains("세미나") || p.contains("보강");
+    }
+
 }
