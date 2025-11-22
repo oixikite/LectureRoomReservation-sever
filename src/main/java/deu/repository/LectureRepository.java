@@ -13,7 +13,6 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.Collections;
 
 /**
@@ -30,9 +29,7 @@ public class LectureRepository {
     private static final LectureRepository instance = new LectureRepository();   //적극적 초기화
 
     // 강의 리스트(기존)
-    //private final List<Lecture> lectureList = new ArrayList<>();
-    //동시성 처리를 위해 Synchronized List , Thread-Safe 리스트 사용
-    private final List<Lecture> lectureList = Collections.synchronizedList(new ArrayList<>());
+    private final List<Lecture> lectureList = new ArrayList<>();
     
     //연도,학기 기본값 설정
     private static final int DEFAULT_YEAR = 2025;
@@ -173,11 +170,10 @@ public class LectureRepository {
         // 안전장치: 저장 시에도 기본값 주입
         if (lecture.getYear() == null || lecture.getYear() == 0) lecture.setYear(DEFAULT_YEAR);
         if (lecture.getSemester() == null) lecture.setSemester(DEFAULT_SEMESTER);
-
-        synchronized (lectureList) {
+      
             deleteByIdInternal(lecture.getId()); // 내부 삭제 메서드 호출
             lectureList.add(lecture);
-        }
+        
         saveAllToFile();
         return "200";
     }
@@ -195,9 +191,7 @@ public class LectureRepository {
     
     // 내부적으로만 쓰는 삭제 로직 (파일 저장은 안 함)
     private boolean deleteByIdInternal(String id) {
-        synchronized (lectureList) {
-            return lectureList.removeIf(l -> l.getId().equals(id));
-        }
+            return lectureList.removeIf(l -> l.getId().equals(id));      
     }
 
     // 강의 존재 여부
@@ -210,11 +204,9 @@ public class LectureRepository {
         return lectureList.stream().filter(l -> l.getId().equals(id)).findFirst();
     }
 
-    // 전체 강의 리스트 반환. 읽기 작업은 synchronized 없이 수행 (CopyOnWriteArrayList 덕분에 안전하고 빠름)
+    // 전체 강의 리스트 반환
     public synchronized List<Lecture> findAll() {
-        synchronized (lectureList) {
         return new ArrayList<>(lectureList);
-        }
     }
 
     // 강의명 + 교수명으로 ID 조회
