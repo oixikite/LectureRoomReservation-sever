@@ -2,6 +2,7 @@ package deu.controller;
 
 import deu.controller.business.*;
 import deu.model.dto.request.command.*;
+import deu.model.dto.request.data.lecture.LectureFilterRequest;
 import deu.model.dto.request.data.lecture.LectureRequest;
 import deu.model.dto.request.data.reservation.DeleteRoomReservationRequest;
 import deu.model.dto.request.data.reservation.RoomReservationLocationRequest;
@@ -9,19 +10,19 @@ import deu.model.dto.request.data.reservation.RoomReservationRequest;
 import deu.model.dto.request.data.user.*;
 import deu.model.dto.response.BasicResponse;
 import deu.model.entity.Lecture;
-
-import deu.model.dto.request.command.NotificationCommandRequest;
-import deu.controller.business.NotificationController;
+import deu.model.dto.request.data.lecture.LectureDateRequest;
 
 public class SystemController {
     private final UserController userController = UserController.getInstance();
     private final UserManagementController userManagementController = UserManagementController.getInstance();
     private final LectureController lectureController = LectureController.getInstance();
     private final ReservationController reservationController = ReservationController.getInstance();
-    private final ReservationManagementController reservationManagementController = ReservationManagementController.getInstance();
-    
+    private final ReservationManagementController reservationManagementController = ReservationManagementController.getInstance(); 
     private final NotificationController notificationController = NotificationController.getInstance();
   
+    private static final SystemController instance = new SystemController();
+    public SystemController() {}
+    public static SystemController getInstance() { return instance; }
 
     public Object handle(Object request) {
         try {
@@ -72,42 +73,22 @@ public class SystemController {
                 };
             }
 
-            // 강의 컨트롤러
+            // [수정] 강의 컨트롤러 (Getter 사용으로 변경)
             else if (request instanceof LectureCommandRequest r) {
-                return switch (r.command) {
-                    case "주간 강의 조회" -> lectureController.handleReturnLectureOfWeek((LectureRequest) r.payload);
+                // command와 payload를 Getter로 접근
+                return switch (r.getCommand()) {
+                    case "주간 강의 조회" -> lectureController.handleReturnLectureOfWeek((LectureRequest) r.getPayload());
                     
-                    case "강의실 강의 조회" ->
-                    lectureController.handleFindLecturesByFilter((deu.model.dto.request.data.lecture.LectureFilterRequest) r.payload);
-
-                        // -----------------------------------------------------------
-                    //[신규] 강의 추가 (payload로 Lecture 객체를 받습니다)
-                    // -----------------------------------------------------------
-                    case "강의 추가" ->
-                            lectureController.handleAddLecture((Lecture) r.payload);
-
-                    // -----------------------------------------------------------
-                    //[신규] 강의 수정 (payload로 Lecture 객체를 받습니다)
-                    // -----------------------------------------------------------
-                    case "강의 수정" ->
-                            lectureController.handleUpdateLecture((Lecture) r.payload);
-
-                    // -----------------------------------------------------------
-                    //[신규] 강의 삭제 (payload로 강의 ID(String)를 받습니다)
-                    // -----------------------------------------------------------
-                    case "강의 삭제" ->
-                            lectureController.handleDeleteLecture((String) r.payload);
+                    // [신규] 월간/일간 조회 추가
+                    case "월간 강의 조회" -> lectureController.handleReturnLectureOfMonth((LectureDateRequest) r.getPayload());
+                    case "일간 강의 조회" -> lectureController.handleReturnLectureOfDay((LectureDateRequest) r.getPayload());
+                    
+                    case "강의실 강의 조회" -> lectureController.handleFindLecturesByFilter((LectureFilterRequest) r.getPayload());
+                    case "강의 추가" -> lectureController.handleAddLecture((Lecture) r.getPayload());
+                    case "강의 수정" -> lectureController.handleUpdateLecture((Lecture) r.getPayload());
+                    case "강의 삭제" -> lectureController.handleDeleteLecture((String) r.getPayload());
                         
-                    default -> new BasicResponse("404", "알 수 없는 명령어");
-                };
-            }
-            
-            //알림 컨트롤러 연결
-            else if (request instanceof NotificationCommandRequest r) {
-                 return switch (r.command) {
-                    case "알림 조회" -> notificationController.handleGetNotifications((String) r.payload);
-                    case "알림 전체 조회" -> notificationController.handleGetAllNotifications((String) r.payload);
-                    default -> new BasicResponse("404", "알 수 없는 알림 명령어");
+                    default -> new BasicResponse("404", "알 수 없는 명령어: " + r.getCommand());
                 };
             }
             

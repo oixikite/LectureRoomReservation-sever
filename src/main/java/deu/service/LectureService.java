@@ -1,23 +1,27 @@
 package deu.service;
 
+import deu.model.dto.request.data.lecture.LectureDateRequest;
 import deu.model.dto.request.data.lecture.LectureRequest;
 import deu.model.dto.response.BasicResponse;
 import deu.model.entity.Lecture;
 import deu.model.enums.DayOfWeek;
-import deu.repository.LectureRepository;
 import deu.model.enums.Semester;
+import deu.repository.LectureRepository;
 
 import java.time.LocalTime;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 
 public class LectureService {
 
     // Singleton 인스턴스(static 인스턴스)
     private static final LectureService instance = new LectureService();
-    
+
     //private 생성자
-    private LectureService() {}
-    
+    private LectureService() {
+    }
+
     //public 접근자
     public static LectureService getInstance() {
         return instance;
@@ -44,7 +48,9 @@ public class LectureService {
         // 4. 강의 목록 중 대상 강의실에 해당하는 강의만 필터링하고 시간표에 배치
         for (Lecture lec : lectures) {
             // 유효한 강의인지 (null 여부, 강의실/건물/층 일치, 요일/시간 존재 여부 등)
-            if (!isValidLectureForRoom(lec, building, floor, lectureroom)) continue;
+            if (!isValidLectureForRoom(lec, building, floor, lectureroom)) {
+                continue;
+            }
 
             //5.[수정] 한글("토")과 영어("SATURDAY") 요일을 DayOfWeek Enum 타입으로 변환
             DayOfWeek lecDay = convertToDayOfWeekEnum(lec.getDay());
@@ -57,8 +63,9 @@ public class LectureService {
 
             // 변환된 요일이 현재 7일 배열(orderedDays)의 몇 번째에 해당하는지 확인
             int dayIndex = indexOfDay(orderedDays, lecDay);
-            if (dayIndex == -1) continue; // 요일이 7일 범위에 없다면 스킵
-
+            if (dayIndex == -1) {
+                continue; // 요일이 7일 범위에 없다면 스킵
+            }
             try {
                 //시작 및 종료 시간을 LocalTime으로 파싱 ("14:00" → LocalTime.of(14, 0))
                 LocalTime start = LocalTime.parse(lec.getStartTime());
@@ -85,24 +92,82 @@ public class LectureService {
         // 최종 결과 반환 (스케줄 배열을 포함한 응답 객체)
         return new BasicResponse("200", schedule);
     }
-    
-    //(연/학기 + 강의실 필터 기반 강의 조회)
-    public List<Lecture> findLectures(Integer year, String semester, String building, String floor, String lectureroom) {
-        if (year == null || semester == null || building == null || floor == null || lectureroom == null) {
-            return List.of();
-        }
-        
-        Semester sem;
-        try {
-            sem = Semester.valueOf(semester.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            sem = Semester.FIRST; // 기본값 보정
-        }
 
-        // LectureRepository 통해 실제 YAML 데이터 조회
-        return LectureRepository.getInstance().findRoomLectures(year, sem, building, floor, lectureroom);
+    // 월간 강의 조회 구현
+    public BasicResponse returnLectureOfMonth(LectureDateRequest payload) {
+        YearMonth yearMonth = YearMonth.from(payload.getTargetDate());
+        int daysInMonth = yearMonth.lengthOfMonth();
+        
+        // [날짜(0~30)][교시(0~12)]
+        Lecture[][] monthlySchedule = new Lecture[daysInMonth][13];
+        List<Lecture> lectures = LectureRepository.getInstance().findAll();
+        
+        // 1일 ~ 말일까지 순회
+        for (int day = 1; day <= daysInMonth; day++) {
+            LocalDate date = yearMonth.atDay(day);
+            // 해당 날짜의 요일 (MONDAY, TUESDAY...)
+            DayOfWeek dayEnum = convertToDayOfWeekEnum(date.getDayOfWeek().name());
+
+            for (Lecture lec : lectures) {
+                if (isValidLectureForRoom(lec, payload.getBuilding(), payload.getFloor(), payload.getLectureroom()) && convertToDayOfWeekEnum(lec.getDay()) == dayEnum) {
+                    fillSchedule(monthlySchedule, day - 1, lec);
+                }
+            }
+        }
+        return new BasicResponse("200", monthlySchedule);
+    }
+    
+    // 일간 강의 조회
+    public BasicResponse returnLectureOfDay(LectureDateRequest payload) {
+        // 요청받은 날짜의 요일 확인
+        DayOfWeek targetDay = convertToDayOfWeekEnum(payload.getTargetDate().getDayOfWeek().name());
+        Lecture[] dailySchedule = new Lecture[13];
+        List<Lecture> lectures = LectureRepository.getInstance().findAll();
+        
+        for (Lecture lec : lectures) {
+            if (isValidLectureForRoom(lec, payload.getBuilding(), payload.getFloor(), payload.getLectureroom()) && convertToDayOfWeekEnum(lec.getDay()) == targetDay) {              
+                try {
+                    LocalTime start = LocalTime.parse(lec.getStartTime());
+                    LocalTime end = LocalTime.parse(lec.getEndTime());
+                    for (int i = 0; i < 13; i++) {
+                        LocalTime pStart = LocalTime.of(9 + i, 0);
+                        LocalTime pEnd = pStart.plusHours(1);
+                        if (start.isBefore(pEnd) && end.isAfter(pStart)) {
+                            dailySchedule[i] = lec;
+                        }
+                    }
+                } catch(Exception e) {}
+            }
+        }
+        return new BasicResponse("200", dailySchedule);
+    }
+    
+    // --- Helper Methods ---
+    
+    private DayOfWeek[] getOrderedDaysFromToday() {
+        DayOfWeek[] days = new DayOfWeek[7];
+        LocalDate today = LocalDate.now();
+        for (int i = 0; i < 7; i++) {
+            days[i] = convertToDayOfWeekEnum(today.plusDays(i).getDayOfWeek().name());
+        }
+        return days;
     }
 
+    // 스케줄 배열 채우기 헬퍼 (주간/월간 공용 사용 가능)
+    private void fillSchedule(Lecture[][] schedule, int dayIdx, Lecture lec) {
+        try {
+            LocalTime start = LocalTime.parse(lec.getStartTime());
+            LocalTime end = LocalTime.parse(lec.getEndTime());
+            for (int p = 0; p < 13; p++) {
+                LocalTime pStart = LocalTime.of(9 + p, 0);
+                LocalTime pEnd = pStart.plusHours(1);
+                if (start.isBefore(pEnd) && end.isAfter(pStart)) {
+                    schedule[dayIdx][p] = lec;
+                }
+            }
+        } catch (Exception e) {}
+    }
+    
     //[수정] 건물, 층, 강의실, 요일, 시간 정보가 유효한지 확인 (빈 문자열은 "전체"로 간주)
     private boolean isValidLectureForRoom(Lecture lec, String building, String floor, String room) {
         if (lec == null || building == null || !building.equals(lec.getBuilding())) {
@@ -125,28 +190,57 @@ public class LectureService {
         // 모든 필터링을 통과
         return true;
     }
-    
+
     //[추가] 한글 및 영어 요일을 DayOfWeek Enum으로 변환하는 헬퍼 메서드
     private DayOfWeek convertToDayOfWeekEnum(String day) {
-        if (day == null) return null;
-        
+        if (day == null) {
+            return null;
+        }
+
         return switch (day.toUpperCase()) { // 대소문자 무시
-            case "월", "MONDAY" -> DayOfWeek.MONDAY;
-            case "화", "TUESDAY" -> DayOfWeek.TUESDAY;
-            case "수", "WEDNESDAY" -> DayOfWeek.WEDNESDAY;
-            case "목", "THURSDAY" -> DayOfWeek.THURSDAY;
-            case "금", "FRIDAY" -> DayOfWeek.FRIDAY;
-            case "토", "SATURDAY" -> DayOfWeek.SATURDAY;
-            case "일", "SUNDAY" -> DayOfWeek.SUNDAY;
-            default -> null; // 잘못된 값이면 null
+            case "월", "MONDAY" ->
+                DayOfWeek.MONDAY;
+            case "화", "TUESDAY" ->
+                DayOfWeek.TUESDAY;
+            case "수", "WEDNESDAY" ->
+                DayOfWeek.WEDNESDAY;
+            case "목", "THURSDAY" ->
+                DayOfWeek.THURSDAY;
+            case "금", "FRIDAY" ->
+                DayOfWeek.FRIDAY;
+            case "토", "SATURDAY" ->
+                DayOfWeek.SATURDAY;
+            case "일", "SUNDAY" ->
+                DayOfWeek.SUNDAY;
+            default ->
+                null; // 잘못된 값이면 null
         };
     }
-
+    
     //요일 배열에서 특정 요일의 인덱스 반환
     private int indexOfDay(DayOfWeek[] array, DayOfWeek target) {
         for (int i = 0; i < array.length; i++) {
-            if (array[i] == target) return i;
+            if (array[i] == target) {
+                return i;
+            }
         }
         return -1;
+    }
+    
+    //(연/학기 + 강의실 필터 기반 강의 조회)
+    public List<Lecture> findLectures(Integer year, String semester, String building, String floor, String lectureroom) {
+        if (year == null || semester == null || building == null || floor == null || lectureroom == null) {
+            return List.of();
+        }
+
+        Semester sem;
+        try {
+            sem = Semester.valueOf(semester.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            sem = Semester.FIRST; // 기본값 보정
+        }
+
+        // LectureRepository 통해 실제 YAML 데이터 조회
+        return LectureRepository.getInstance().findRoomLectures(year, sem, building, floor, lectureroom);
     }
 }

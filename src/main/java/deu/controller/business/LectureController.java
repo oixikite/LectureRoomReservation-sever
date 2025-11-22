@@ -1,30 +1,98 @@
-
 package deu.controller.business;
 
+import deu.model.dto.request.command.LectureCommandRequest;
+import deu.model.dto.request.data.lecture.LectureDateRequest;
+import deu.model.dto.request.data.lecture.LectureFilterRequest;
 import deu.model.dto.request.data.lecture.LectureRequest;
 import deu.model.dto.response.BasicResponse;
 import deu.model.entity.Lecture;
+import deu.repository.LectureRepository;
 import deu.service.LectureService;
-import deu.model.dto.request.data.lecture.LectureFilterRequest;
-import deu.model.dto.response.LectureListResponse;
-import deu.repository.LectureRepository; //[신규] CUD를 위한 Repository 임포트
 
-import java.util.Arrays;
 import java.util.List;
 
-// 강의 컨트롤러
+/**
+ * 강의 관련 요청 처리 컨트롤러
+ * - 조회(Read): Service 계층 이용
+ * - 관리(CUD): Repository 계층 직접 이용 (요청 사항 반영)
+ */
 public class LectureController {
     private static final LectureController instance = new LectureController();
 
-    private LectureController() {}
+    //[수정] Service(조회용)와 Repository(CUD용)를 둘 다 가짐
+    private final LectureService lectureService;
+    private final LectureRepository lectureRepository;
+    
+    private LectureController() {
+        // [수정] 생성자에서 인스턴스 할당
+        this.lectureService = LectureService.getInstance();
+        this.lectureRepository = LectureRepository.getInstance();
+    }
 
     public static LectureController getInstance() {
         return instance;
     }
+    
+    /**
+     * 클라이언트 요청 분기 처리 (Dispatcher)
+     */
+    public BasicResponse handle(LectureCommandRequest request) {
+        // DTO Getter 사용
+        String command = request.getCommand(); 
+        Object data = request.getPayload(); // [수정] getPayload() 사용
+ 
+        try {
+            if (command == null) {
+                return new BasicResponse("400", "명령어가 없습니다.");
+            }
 
-    //[수정] Service(조회용)와 Repository(CUD용)를 둘 다 가짐
-    private final LectureService lectureService = LectureService.getInstance();
-    private final LectureRepository lectureRepository = LectureRepository.getInstance();
+            switch (command) {
+                // --- [R] 조회 기능 (Service) ---
+                case "주간 강의 조회":
+                    if (data instanceof LectureRequest req) {
+                        return (BasicResponse) handleReturnLectureOfWeek(req);
+                    }
+                    break;
+                case "월간 강의 조회":
+                    if (data instanceof LectureDateRequest req) {
+                        return lectureService.returnLectureOfMonth(req);
+                    }
+                    break;
+                case "일간 강의 조회":
+                    if (data instanceof LectureDateRequest req) {
+                        return lectureService.returnLectureOfDay(req);
+                    }
+                    break;
+                case "강의실 강의 조회": 
+                    if (data instanceof LectureFilterRequest req) {
+                        return (BasicResponse) handleFindLecturesByFilter(req);
+                    }
+                    break;
+
+                // --- [CUD] 관리 기능 (Repository) ---
+                case "강의 추가":
+                    if (data instanceof Lecture req) {
+                        return handleAddLecture(req);
+                    }
+                    break;
+                case "강의 수정":
+                    if (data instanceof Lecture req) {
+                        return handleUpdateLecture(req);
+                    }
+                    break;
+                case "강의 삭제":
+                    if (data instanceof String req) { 
+                        return handleDeleteLecture(req);
+                    }
+                    break;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new BasicResponse("500", "서버 내부 오류: " + e.getMessage());
+        }
+
+        return new BasicResponse("400", "잘못된 요청이거나 데이터 형식이 일치하지 않습니다. (" + command + ")");
+    }
 
     // ===============================================================
     //기존 '주간 강의 조회' 로직 (LectureService 사용)
@@ -36,6 +104,16 @@ public class LectureController {
         //System.out.println("[LectureController] 반환된 데이터: " + Arrays.deepToString((Lecture[][]) result.data));
         
         return result;
+    }
+    
+    // [신규] 월간 핸들러 추가
+    public BasicResponse handleReturnLectureOfMonth(LectureDateRequest payload) {
+        return lectureService.returnLectureOfMonth(payload);
+    }
+
+    // [신규] 일간 핸들러 추가
+    public BasicResponse handleReturnLectureOfDay(LectureDateRequest payload) {
+        return lectureService.returnLectureOfDay(payload);
     }
 
     // ===============================================================
@@ -52,11 +130,11 @@ public class LectureController {
             );
 
             // 성공 응답 생성
-            return LectureListResponse.ok(lectures);
+            return new BasicResponse("200", lectures); 
 
         } catch (Exception e) {
             e.printStackTrace();
-            return LectureListResponse.error("500", "강의 목록 조회 중 오류 발생: " + e.getMessage());
+            return new BasicResponse("500", "강의 목록 조회 실패");
         }
     }
 
