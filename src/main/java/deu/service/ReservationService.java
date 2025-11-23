@@ -174,17 +174,19 @@ public class ReservationService {
         }
 
 
-        // (강의실 중복 방지 로직은 Remote 정책에 따라 제거됨)
+        // 저장 (강의실 중복 방지 로직은 Remote 정책에 따라 제거됨)
         repo.save(roomReservation);
+        
+        // [추가] 예약 신청 이력 저장 (History)
+        String notiTitle = "예약 신청";
+        String notiMsg = String.format("[%s %s호] %s %s 예약이 신청되었습니다.", 
+            roomReservation.getBuildingName(), roomReservation.getLectureRoom(), 
+            roomReservation.getDate(), roomReservation.getStartTime());
+        saveNotification(roomReservation, notiTitle, notiMsg);
+            
         repo.saveToFile(); // [Refactor] 파일 저장 명시
             
-            
-            
-            
-            // (강의실 중복 방지 로직은 Remote 정책에 따라 제거됨)
-            repo.save(roomReservation);
-            repo.saveToFile(); // [Refactor] 파일 저장 명시
-            return new BasicResponse("200", "예약이 완료되었습니다.");
+        return new BasicResponse("200", "예약이 완료되었습니다.");
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -218,8 +220,15 @@ public class ReservationService {
                 .cancellationReason(payload.getReason()) // 사유 저장
                 .build();
         
-        //저장 (Repository의 save는 ID가 같으면 덮어쓰도록 수정됨)
+        // 저장 (Repository의 save는 ID가 같으면 덮어쓰도록 수정됨)
         repo.save(cancelledReservation);
+        
+        // [추가] 본인 취소 이력 저장 (History)
+        String notiTitle = "예약 취소";
+        String notiMsg = String.format("[%s %s호] 사용자 요청에 의해 예약이 취소되었습니다.", 
+            target.getBuildingName(), target.getLectureRoom());
+        saveNotification(cancelledReservation, notiTitle, notiMsg);
+        
         repo.saveToFile();
 
 //        repo.deleteById(payload.roomReservationId);

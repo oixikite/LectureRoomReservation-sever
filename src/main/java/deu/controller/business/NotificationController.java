@@ -8,6 +8,7 @@ package deu.controller.business;
  *
  * @author scq37
  */
+import deu.model.dto.request.command.NotificationCommandRequest;
 import deu.model.dto.response.BasicResponse;
 import deu.model.dto.response.NotificationDTO;
 import deu.service.NotificationService;
@@ -25,14 +26,45 @@ public class NotificationController {
     private NotificationController() {}
 
     /**
-     * 사용자의 알림 목록을 반환하는 핸들러
-     * @param userId 사용자 ID (String)
-     * @return 알림 리스트가 담긴 BasicResponse
+     * [핵심] 클라이언트의 요청 객체(NotificationCommandRequest)를 받아 분기 처리
+     * @param request 클라이언트가 보낸 명령 객체
+     * @return 처리 결과 (BasicResponse)
+     */
+   public BasicResponse handleRequest(NotificationCommandRequest request) {
+        String command = request.command;
+        Object payload = request.payload;
+        try {
+            // payload가 String(사용자 ID)인지 검증 후 캐스팅
+            if (payload instanceof String) {
+                String userId = (String) payload;
+
+                // 명령(Command)에 따라 적절한 핸들러 호출
+                if ("알림 조회".equals(command)) {
+                    return handleGetNotifications(userId);
+                    
+                } else if ("알림 전체 조회".equals(command)) {
+                    return handleGetAllNotifications(userId);
+                }
+            } else {
+                return new BasicResponse("400", "잘못된 데이터 형식입니다. (String ID 필요)");
+            }
+
+            return new BasicResponse("400", "알 수 없는 알림 명령입니다: " + command);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new BasicResponse("500", "서버 알림 처리 중 오류: " + e.getMessage());
+        }
+    }
+   
+    /**
+     * 사용자의 알림 목록을 반환하는 핸들러 (안 읽은 알림 위주)
+     * @param userId 사용자 ID
      */
     public BasicResponse handleGetNotifications(String userId) {
         try {
             List<NotificationDTO> notifications = notificationService.getNotifications(userId);
-            // 성공적으로 조회 (데이터가 없으면 빈 리스트 반환)
+            // 데이터가 없어도 빈 리스트 반환 (성공 처리)
             return new BasicResponse("200", notifications);
         } catch (Exception e) {
             e.printStackTrace();
@@ -41,7 +73,8 @@ public class NotificationController {
     }
     
     /**
-     * 알림 전체 내역 조회 핸들러
+     * 알림 전체 내역 조회 핸들러 (히스토리용)
+     * @param userId 사용자 ID
      */
     public BasicResponse handleGetAllNotifications(String userId) {
         try {
