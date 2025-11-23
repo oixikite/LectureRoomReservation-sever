@@ -12,6 +12,9 @@ import deu.model.dto.response.BasicResponse;
 import deu.model.entity.Lecture;
 import deu.model.dto.request.data.lecture.LectureDateRequest;
 
+import deu.model.dto.request.command.NotificationCommandRequest; // 알림 관련 import 지우지 말것
+import deu.controller.business.NotificationController;  // 알림 관련 import 지우지 말것
+
 public class SystemController {
     private final UserController userController = UserController.getInstance();
     private final UserManagementController userManagementController = UserManagementController.getInstance();
@@ -89,6 +92,15 @@ public class SystemController {
                     case "강의 삭제" -> lectureController.handleDeleteLecture((String) r.getPayload());
                         
                     default -> new BasicResponse("404", "알 수 없는 명령어: " + r.getCommand());
+                };
+            }
+            
+            // 알림 컨트롤러 - 지우지 말것 
+            else if (request instanceof NotificationCommandRequest r) {
+                 return switch (r.command) {
+                    case "알림 조회" -> notificationController.handleGetNotifications((String) r.payload);
+                    case "알림 전체 조회" -> notificationController.handleGetAllNotifications((String) r.payload);
+                    default -> new BasicResponse("404", "알 수 없는 알림 명령어");
                 };
             }
             
