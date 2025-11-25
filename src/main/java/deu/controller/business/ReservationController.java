@@ -1,5 +1,6 @@
 package deu.controller.business;
 
+import deu.model.dto.request.command.ReservationCommandRequest;
 import deu.model.dto.request.data.reservation.DeleteRoomReservationRequest;
 import deu.model.dto.request.data.reservation.RoomReservationLocationRequest;
 import deu.model.dto.request.data.reservation.RoomReservationRequest;
@@ -35,6 +36,19 @@ public class ReservationController {
     // 개인별 주간 예약 배열 조회 (당일 ~ +6일) TODO: RoomReservation[7][13]
     public BasicResponse handleWeekRoomReservationByUserNumber(String payload) {
         return reservationService.weekRoomReservationByUserNumber(payload);
+    }
+    
+    // [추가] 퍼사드로부터 위임받은 요청 처리
+    public Object handle(ReservationCommandRequest request) {
+        return switch (request.command) {
+            case "예약 요청" -> handleAddRoomReservation((RoomReservationRequest) request.payload);
+            case "예약 수정" -> handleModifyRoomReservation((RoomReservationRequest) request.payload);
+            case "예약 삭제" -> handlDeleteRoomReservation((DeleteRoomReservationRequest) request.payload);
+            case "사용자 예약 리스트 조회" -> handleUserRoomReservationList((String) request.payload);
+            case "사용자 예약 배열 조회" -> handleWeekRoomReservationByUserNumber((String) request.payload);
+            case "강의실 예약 배열 조회" -> handleWeekRoomReservationByLectureroom((RoomReservationLocationRequest) request.payload);
+            default -> new BasicResponse("404", "알 수 없는 예약 명령어");
+        };
     }
 
     // 어래 기능은 관리자에서도 동일하다.=======================================================================================

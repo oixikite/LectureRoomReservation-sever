@@ -30,26 +30,23 @@ public class NotificationController {
      * @param request 클라이언트가 보낸 명령 객체
      * @return 처리 결과 (BasicResponse)
      */
-   public BasicResponse handleRequest(NotificationCommandRequest request) {
+   public BasicResponse handle(NotificationCommandRequest request) {
         String command = request.command;
         Object payload = request.payload;
+        
         try {
-            // payload가 String(사용자 ID)인지 검증 후 캐스팅
-            if (payload instanceof String) {
-                String userId = (String) payload;
-
-                // 명령(Command)에 따라 적절한 핸들러 호출
-                if ("알림 조회".equals(command)) {
-                    return handleGetNotifications(userId);
-                    
-                } else if ("알림 전체 조회".equals(command)) {
-                    return handleGetAllNotifications(userId);
-                }
-            } else {
-                return new BasicResponse("400", "잘못된 데이터 형식입니다. (String ID 필요)");
+            // payload가 String(사용자 ID)인지 검증
+            if (!(payload instanceof String)) {
+                 return new BasicResponse("400", "잘못된 데이터 형식입니다. (String ID 필요)");
             }
 
-            return new BasicResponse("400", "알 수 없는 알림 명령입니다: " + command);
+            String userId = (String) payload;
+
+            return switch (command) {
+                case "알림 조회" -> handleGetNotifications(userId);
+                case "알림 전체 조회" -> handleGetAllNotifications(userId);
+                default -> new BasicResponse("400", "알 수 없는 알림 명령입니다: " + command);
+            };
 
         } catch (Exception e) {
             e.printStackTrace();

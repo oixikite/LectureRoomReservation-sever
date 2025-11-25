@@ -7,6 +7,7 @@ import deu.model.dto.request.data.user.LogoutRequest;
 import deu.model.dto.request.data.user.SignupRequest;
 import deu.model.dto.response.CurrentResponse;
 import deu.service.UserService;
+import deu.model.dto.request.command.UserCommandRequest;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,5 +67,17 @@ public class UserController {
     // 사용자 이름 반환 컨트롤러
     public Object handleFindUserName(FindUserNameRequest payload) {
         return userService.findUserName(payload);
+    }
+    
+    //퍼사드(SystemController)로부터 넘어온 요청을 처리하는 진입점
+    public Object handle(UserCommandRequest request) {
+        return switch (request.command) {
+            case "로그인" -> handleLogin((LoginRequest) request.payload);
+            case "회원가입" -> handleSignup((SignupRequest) request.payload);
+            case "로그아웃" -> handleLogout((LogoutRequest) request.payload);
+            case "동시접속자" -> handleCurrentUser(); // 페이로드 불필요
+            case "사용자 이름 반환" -> handleFindUserName((FindUserNameRequest) request.payload);
+            default -> new BasicResponse("404", "알 수 없는 사용자 명령어");
+        };
     }
 }
