@@ -11,6 +11,10 @@ import deu.repository.RoomCapacityRepository;
 import deu.service.policy.ProfessorReservationPolicy;
 import deu.service.policy.ReservationPolicy;
 import deu.service.policy.StudentReservationPolicy;
+import deu.service.builder.DefaultRoomReservationBuilder;
+import deu.service.builder.RoomReservationBuilder;
+import deu.service.builder.RoomReservationDirector;
+
 import lombok.Getter;
 
 import java.time.LocalDate;
@@ -57,23 +61,14 @@ public class ReservationService {
                 return new BasicResponse("400", "사용자 번호 형식이 올바르지 않습니다. (S**** / P****)");
             }
             
-            // [Refactor] Builder Pattern 사용 (HEAD 반영)
-            RoomReservation roomReservation = RoomReservation.builder()
-                    .buildingName(payload.getBuildingName())
-                    .floor(payload.getFloor())
-                    .lectureRoom(payload.getLectureRoom())
-                    .number(number) //trim된 number 사용할 것
-                    .title(payload.getTitle())
-                    .description(payload.getDescription())
-                    .date(payload.getDate())
-                    .dayOfTheWeek(payload.getDayOfTheWeek())
-                    .startTime(payload.getStartTime())
-                    .endTime(payload.getEndTime())
-                    .purpose(payload.getPurpose())
-                    .accompanyingStudentCount(payload.getAccompanyingStudentCount())
-                    .accompanyingStudents(payload.getAccompanyingStudents())
-                    .status(initialStatus)
-                    .build();
+           
+            // [Refactor] Builder Pattern (RoomReservationDirector + RoomReservationBuilder 사용)
+            RoomReservationDirector director =
+             new RoomReservationDirector(new DefaultRoomReservationBuilder());
+
+            RoomReservation roomReservation =
+             director.construct(payload, number, initialStatus);
+
 
             ReservationRepository repo = this.reservationRepository;
 
