@@ -2,20 +2,21 @@ package deu.controller;
 
 import deu.controller.business.*;
 import deu.model.dto.request.command.*;
-import deu.model.dto.request.data.lecture.LectureFilterRequest;
-import deu.model.dto.request.data.lecture.LectureRequest;
-import deu.model.dto.request.data.reservation.DeleteRoomReservationRequest;
-import deu.model.dto.request.data.reservation.RoomReservationLocationRequest;
-import deu.model.dto.request.data.reservation.RoomReservationRequest;
-import deu.model.dto.request.data.user.*;
 import deu.model.dto.response.BasicResponse;
-import deu.model.entity.Lecture;
-import deu.model.dto.request.data.lecture.LectureDateRequest;
 
-import deu.model.dto.request.command.NotificationCommandRequest; // 알림 관련 import 지우지 말것
-import deu.controller.business.NotificationController;  // 알림 관련 import 지우지 말것
+/**
+ * [Facade Pattern 적용] 시스템의 통합 인터페이스 (System Controller)
+ * * 역할:
+ * 1. 복잡한 서브시스템(User, Lecture, Reservation 등)에 대한 단일 진입점(Entry Point) 제공
+ * 2. 클라이언트(View/Server)와 비즈니스 로직(Business Controller) 간의 결합도(Coupling) 감소
+ * 3. 요청 객체(Request)의 타입에 따라 적절한 하위 컨트롤러로 책임 위임(Delegation)
+ */
 
 public class SystemController {
+    
+    // --- Subsystems (하위 시스템 컴포넌트) ---
+    // 퍼사드는 하위 시스템의 인스턴스를 소유하며, 요청을 위임
+    
     private final UserController userController = UserController.getInstance();
     private final UserManagementController userManagementController = UserManagementController.getInstance();
     private final LectureController lectureController = LectureController.getInstance();
@@ -26,85 +27,52 @@ public class SystemController {
     private static final SystemController instance = new SystemController();
     public SystemController() {}
     public static SystemController getInstance() { return instance; }
-
+    
+    /**
+     * 퍼사드 패턴의 핵심 진입점 (Facade Entry Point)
+     * - 클라이언트의 요청 객체 타입을 확인하여 적절한 컨트롤러로 위임(Delegate)
+     * - 구체적인 명령(Command)이나 데이터(Payload)는 열어보지 않음
+     *
+     * * [디자인 패턴 적용 효과]
+     * 1. 캡슐화(Encapsulation): 클라이언트는 구체적인 명령어("로그인", "예약" 등)의 처리 로직을 알 필요 x
+     * 2. OCP(Open-Closed Principle): 새로운 기능(예: "비밀번호 변경")이 추가되어도 
+     * 이 클래스(SystemController)는 수정할 필요 없이, 하위 컨트롤러(UserController)만 수정하면 됨
+     */
+    
     public Object handle(Object request) {
         try {
-            // 사용자 컨트롤러
-            if (request instanceof UserCommandRequest r) {
-                return switch (r.command) {
-                    case "로그인" -> userController.handleLogin((LoginRequest) r.payload);
-                    case "회원가입" -> userController.handleSignup((SignupRequest) r.payload);
-                    case "로그아웃" -> userController.handleLogout((LogoutRequest) r.payload);
-                    case "동시접속자" -> userController.handleCurrentUser();
-                    case "사용자 이름 반환" -> userController.handleFindUserName((FindUserNameRequest) r.payload);
-                    default -> new BasicResponse("404", "알 수 없는 명령어");
-                };
+            // 사용자 관련 요청 (로그인, 로그아웃 등) -> UserController 위임
+            if (request instanceof UserCommandRequest r) {                
+                return userController.handle(r);
             }
 
-            // 사용자 관리 컨트롤러
+            // 사용자 관리(admin) 요청 -> UserManagementController 위임
             else if (request instanceof UserManagementCommandRequest r) {
-                return switch (r.command) {
-                    case "사용자 수정" -> userManagementController.handleUpdateUser((UserDataModificationRequest) r.payload);
-                    case "사용자 삭제" -> userManagementController.handleDeleteUser((DeleteRequest) r.payload);
-                    case "사용자 조회" -> userManagementController.handleFindUser((FindRequest) r.payload);
-                    case "전체 사용자 조회" -> userManagementController.handleFindAllUsers();
-                    default -> new BasicResponse("404", "알 수 없는 명령어");
-                };
+                return userManagementController.handle(r);
             }
 
-            // 예약 컨트롤러
+            // 예약 요청 -> ReservationController 위임
             else if (request instanceof ReservationCommandRequest r) {
-                return switch (r.command) {
-                    case "예약 요청" -> reservationController.handleAddRoomReservation((RoomReservationRequest) r.payload);
-                    case "예약 수정" -> reservationController.handleModifyRoomReservation((RoomReservationRequest) r.payload);
-                    case "예약 삭제" -> reservationController.handlDeleteRoomReservation((DeleteRoomReservationRequest) r.payload);
-                    case "사용자 예약 리스트 조회" -> reservationController.handleUserRoomReservationList((String) r.payload);
-                    case "사용자 예약 배열 조회" -> reservationController.handleWeekRoomReservationByUserNumber((String) r.payload);
-                    case "강의실 예약 배열 조회" -> reservationController.handleWeekRoomReservationByLectureroom((RoomReservationLocationRequest) r.payload);
-                    default -> new BasicResponse("404", "알 수 없는 명령어");
-                };
+                return reservationController.handle(r);
             }
 
-            // 예약 관리 컨트롤러
+            // 예약 관리 요청 -> ReservationManagementController 위임
             else if (request instanceof ReservationManagementCommandRequest r) {
-                return switch (r.command) {
-                    case "예약 수정" -> reservationManagementController.handleModifyRoomReservation((RoomReservationRequest) r.payload);
-                    case "예약 삭제" -> reservationManagementController.handleDeleteRoomReservation((DeleteRoomReservationRequest) r.payload);
-                    case "예약 대기 전체 조회" -> reservationManagementController.handleFindAllRoomReservation();
-                    case "예약 상태 변경" -> reservationManagementController.handleChangeRoomReservationStatus((String) r.payload);
-                    default -> new BasicResponse("404", "알 수 없는 명령어");
-                };
+                return reservationManagementController.handle(r);
             }
 
-            // [수정] 강의 컨트롤러 (Getter 사용으로 변경)
+            // 강의 요청 -> LectureController 위임
             else if (request instanceof LectureCommandRequest r) {
-                // command와 payload를 Getter로 접근
-                return switch (r.getCommand()) {
-                    case "주간 강의 조회" -> lectureController.handleReturnLectureOfWeek((LectureRequest) r.getPayload());
-                    
-                    // [신규] 월간/일간 조회 추가
-                    case "월간 강의 조회" -> lectureController.handleReturnLectureOfMonth((LectureDateRequest) r.getPayload());
-                    case "일간 강의 조회" -> lectureController.handleReturnLectureOfDay((LectureDateRequest) r.getPayload());
-                    
-                    case "강의실 강의 조회" -> lectureController.handleFindLecturesByFilter((LectureFilterRequest) r.getPayload());
-                    case "강의 추가" -> lectureController.handleAddLecture((Lecture) r.getPayload());
-                    case "강의 수정" -> lectureController.handleUpdateLecture((Lecture) r.getPayload());
-                    case "강의 삭제" -> lectureController.handleDeleteLecture((String) r.getPayload());
-                        
-                    default -> new BasicResponse("404", "알 수 없는 명령어: " + r.getCommand());
-                };
+                return lectureController.handle(r);
             }
             
-            // 알림 컨트롤러 - 지우지 말것 
+            // 알림 요청 -> NotificationController 위임
             else if (request instanceof NotificationCommandRequest r) {
-                 return switch (r.command) {
-                    case "알림 조회" -> notificationController.handleGetNotifications((String) r.payload);
-                    case "알림 전체 조회" -> notificationController.handleGetAllNotifications((String) r.payload);
-                    default -> new BasicResponse("404", "알 수 없는 알림 명령어");
-                };
+                    return notificationController.handle(r);
             }
             
             return new BasicResponse("405", "지원하지 않는 요청 타입");
+            
         } catch (Exception e) {
             e.printStackTrace(); // 로그 출력 (디버깅)
             return new BasicResponse("500", "서버 처리 중 예외 발생: " + e.getMessage());

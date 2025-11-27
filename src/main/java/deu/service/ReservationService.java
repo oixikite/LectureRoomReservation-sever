@@ -11,6 +11,10 @@ import deu.repository.RoomCapacityRepository;
 import deu.service.policy.ProfessorReservationPolicy;
 import deu.service.policy.ReservationPolicy;
 import deu.service.policy.StudentReservationPolicy;
+import deu.service.builder.DefaultRoomReservationBuilder;
+import deu.service.builder.RoomReservationBuilder;
+import deu.service.builder.RoomReservationDirector;
+
 import lombok.Getter;
 
 import java.time.LocalDate;
@@ -31,42 +35,42 @@ public class ReservationService {
         // 생성 시점에 싱글톤 Repository를 할당
         this.reservationRepository = ReservationRepository.getInstance();
     }
-
+    
     // 사용자 관점 ========================================================================================================
     // 예약 신청
     public BasicResponse createRoomReservation(RoomReservationRequest payload) {
         try {
-            // [Refactor] Builder Pattern 사용 (HEAD 반영)
-            RoomReservation roomReservation = RoomReservation.builder()
-                    .buildingName(payload.getBuildingName())
-                    .floor(payload.getFloor())
-                    .lectureRoom(payload.getLectureRoom())
-                    .number(payload.getNumber())
-                    .title(payload.getTitle())
-                    .description(payload.getDescription())
-                    .date(payload.getDate())
-                    .dayOfTheWeek(payload.getDayOfTheWeek())
-                    .startTime(payload.getStartTime())
-                    .endTime(payload.getEndTime())
-                    .purpose(payload.getPurpose())
-                    .accompanyingStudentCount(payload.getAccompanyingStudentCount())
-                    .accompanyingStudents(payload.getAccompanyingStudents())
-                    .build();
-
-            ReservationRepository repo = this.reservationRepository;
-
-            // [Feature] 1. 학생/교수 정책 자동 선택 및 검증 (Remote 반영)
-            String number = payload.getNumber() == null ? "" : payload.getNumber().trim();
+            //데이터 처리 수행 순서 중요하니까 아래 순서 꼭 유지
+            
+            //1. 학생/교수 정책 자동 선택 및 검증 (가장 먼저 수행할 것)
+            String rawNumber = payload.getNumber() == null ? "" : payload.getNumber();
+            String number = rawNumber.trim(); // 공백 제거된 ID
             String lower = number.toLowerCase();
+            
+            //2.사용자 타입에 따른 정책 및 초기 상태 결정. 일단 기본값은 대기로 상태 들어가고 있음(RoomReservation 참고)
             ReservationPolicy policy;
-
+            String initialStatus; // 초기 상태 변수
+            
             if (lower.startsWith("p")) {
                 policy = new ProfessorReservationPolicy();
+                initialStatus = "승인"; // 교수는 즉시 승인
             } else if (lower.startsWith("s")) {
                 policy = new StudentReservationPolicy();
+                initialStatus = "대기"; // 학생은 대기 상태
             } else {
                 return new BasicResponse("400", "사용자 번호 형식이 올바르지 않습니다. (S**** / P****)");
             }
+            
+           
+            // [Refactor] Builder Pattern (RoomReservationDirector + RoomReservationBuilder 사용)
+            RoomReservationDirector director =
+             new RoomReservationDirector(new DefaultRoomReservationBuilder());
+
+            RoomReservation roomReservation =
+             director.construct(payload, number, initialStatus);
+
+
+            ReservationRepository repo = this.reservationRepository;
 
             try {
                 policy.validate(payload);
@@ -106,6 +110,7 @@ public class ReservationService {
             // [Feature] 3. 하루 시간 제한 검사 (Remote 반영)
             List<RoomReservation> todays = repo.findByUser(number).stream()
                     .filter(r -> r.getDate().equals(payload.getDate()))
+                    .filter(r -> !"삭제됨".equals(r.getStatus()) && !"취소됨".equals(r.getStatus()))
                     .toList();
 
             int usedMinutes = 0;

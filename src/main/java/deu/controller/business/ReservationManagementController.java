@@ -6,6 +6,7 @@ import deu.model.dto.response.BasicResponse;
 import deu.model.entity.RoomReservation;
 import deu.service.ReservationService;
 import lombok.Getter;
+import deu.model.dto.request.command.ReservationManagementCommandRequest;
 
 // 예약 관리 컨트롤러
 public class ReservationManagementController {
@@ -34,6 +35,20 @@ public class ReservationManagementController {
     // 예약 상태가 "대기" 인 모든 예약 내역 반환
     public BasicResponse handleFindAllRoomReservation() {
         return reservationService.findAllRoomReservation();
+    }
+    
+    /**
+     * 퍼사드(SystemController)로부터 위임받은 요청을 처리하는 진입점
+     */
+    public BasicResponse handle(ReservationManagementCommandRequest request) {
+        return switch (request.command) {
+            case "예약 수정" -> handleModifyRoomReservation((RoomReservationRequest) request.payload);
+            case "예약 삭제" -> handleDeleteRoomReservation((DeleteRoomReservationRequest) request.payload);
+            case "예약 상태 변경" -> handleChangeRoomReservationStatus((String) request.payload);
+            // "예약 대기 전체 조회"는 페이로드(입력값)가 필요 없는 메서드입니다.
+            case "예약 대기 전체 조회" -> handleFindAllRoomReservation(); 
+            default -> new BasicResponse("404", "알 수 없는 예약 관리 명령어: " + request.command);
+        };
     }
 
 }

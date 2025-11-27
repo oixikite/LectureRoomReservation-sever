@@ -66,6 +66,11 @@ public class LectureRepository {
 
         loadAllFromFile();
     }
+    
+    // (Lombok @Getter 어노테이션에 의해 아래 메서드가 자동으로 생성된 것과 같음)
+    // public static LectureRepository getInstance() {
+    //     return instance;
+    // }
 
     // 파일 저장
     private synchronized void saveAllToFile() {
