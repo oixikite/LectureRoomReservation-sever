@@ -11,6 +11,7 @@ package deu.controller;
 
 import deu.model.dto.request.command.UserCommandRequest;
 import deu.model.dto.request.data.user.LoginRequest;
+import deu.model.dto.request.data.user.LogoutRequest;
 import deu.model.dto.request.data.user.SignupRequest;
 import deu.model.dto.response.BasicResponse;
 import org.junit.jupiter.api.*;
@@ -36,7 +37,7 @@ users.yaml 파일: 이 테스트는 실제로 파일에 데이터를 쓰기때�
 // 순서가 중요한 시나리오 테스트이므로 순서 지정 기능 활성화
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SystemIntegrationTest {
-    //Mock이 아니라 '진짜' 인스턴스를 가져옴
+    //Mock이 아니라 진짜 인스턴스를 가져옴
     // 생성자가 public이지만, 편의상 getInstance()를 사용
     private final SystemController systemController = SystemController.getInstance();
 
@@ -104,7 +105,58 @@ public class SystemIntegrationTest {
     
     @Test
     @Order(3)
-    @DisplayName("[통합 3단계] 예외 처리 시나리오")
+    @DisplayName("[통합 3단계] 로그아웃 시나리오")
+    void integration_logout_test() {
+        System.out.println("\n=== [통합 Test] 3. 로그아웃 프로세스 시작 ===");
+
+        // 1. 앞서 로그인한 사용자를 로그아웃 시킴
+        LogoutRequest logoutDto = new LogoutRequest(TEST_ID, TEST_PW);
+        UserCommandRequest command = new UserCommandRequest("로그아웃", logoutDto);
+
+        System.out.println("-> [요청] ID: " + TEST_ID + " 로그아웃 시도");
+
+        // 2. 퍼사드에게 전달
+        Object responseObj = systemController.handle(command);
+        BasicResponse response = (BasicResponse) responseObj;
+
+        System.out.println("-> [응답 코드] " + response.code);
+        System.out.println("-> [응답 메시지] " + response.data);
+
+        // 3. 검증
+        assertEquals("200", response.code);
+        System.out.println(">>> 로그아웃 성공 (세션 종료 확인)");
+    }
+    
+      @Test
+    @Order(4)
+    @DisplayName("[통합 4단계] 로그인 실패 시나리오 (비밀번호 불일치 검증)")
+    void integration_login_fail_test() {
+        System.out.println("\n=== [통합 Test] 4. 로그인 실패 테스트 시작 ===");
+
+        // 1. 아이디는 맞지만, 틀린 비밀번호로 로그인 시도
+        String wrongPw = "wrong_password_123";
+        LoginRequest loginDto = new LoginRequest(TEST_ID, wrongPw);
+        UserCommandRequest command = new UserCommandRequest("로그인", loginDto);
+
+        System.out.println("-> [요청] ID: " + TEST_ID + " / PW: " + wrongPw + " (틀린 비번)");
+
+        // 2. 퍼사드에게 전달
+        Object responseObj = systemController.handle(command);
+        BasicResponse response = (BasicResponse) responseObj;
+
+        System.out.println("-> [응답 코드] " + response.code);
+        System.out.println("-> [응답 메시지] " + response.data);
+
+        // 3. 검증: 절대 200이 나오면 안 됨 (보통 400 실패)
+        assertNotEquals("200", response.code, "틀린 비밀번호로는 로그인되면 안 됩니다.");
+        
+        System.out.println(">>> 로그인 거부 성공 (보안 로직 정상 작동)");
+    }
+
+    
+    @Test
+    @Order(5)
+    @DisplayName("[통합 5단계] 예외 처리 시나리오")
     void integration_error_test() {
         System.out.println("\n=== [통합 Test] 3. 잘못된 요청 필터링 시작 ===");
         

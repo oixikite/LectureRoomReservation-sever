@@ -1,147 +1,63 @@
-//package deu.controller;
-//
-//import static org.junit.jupiter.api.Assertions.*;
-//
-//import deu.controller.business.UserController;
-//import deu.model.dto.request.data.user.LoginRequest;
-//import deu.model.dto.request.data.user.LogoutRequest;
-//import deu.model.dto.request.data.user.SignupRequest;
-//import deu.model.dto.request.command.UserCommandRequest;
-//import deu.model.dto.response.BasicResponse;
-//import deu.model.dto.response.CurrentResponse;
-//import org.junit.jupiter.api.DisplayName;
-//import org.junit.jupiter.api.Test;
-//import org.mockito.MockedStatic;
-//
-//import static org.mockito.Mockito.*;
-//
-//[기존코드] 삭제 예정
-//public class SystemControllerTest {
-//
-//    @Test
-//    @DisplayName("로그인 명령 처리: handleLogin 호출 확인")
-//    void handle_login_command_should_call_handleLogin() {
-//        try (MockedStatic<UserController> mockedStatic = mockStatic(UserController.class)) {
-//            UserController mockUserController = mock(UserController.class);
-//            mockedStatic.when(UserController::getInstance).thenReturn(mockUserController);
-//
-//            LoginRequest loginRequest = new LoginRequest("S2023001", "pw");
-//            BasicResponse expected = new BasicResponse("200", "로그인 성공");
-//            when(mockUserController.handleLogin(loginRequest)).thenReturn(expected);
-//
-//            SystemController controller = new SystemController();
-//            Object response = controller.handle(new UserCommandRequest("로그인", loginRequest));
-//
-//            assertTrue(response instanceof BasicResponse);
-//            assertEquals("200", ((BasicResponse) response).code);
-//        }
-//    }
-//
-//    @Test
-//    @DisplayName("회원가입 명령 처리: handleSignup 호출 확인")
-//    void handle_signup_command_should_call_handleSignup() {
-//        try (MockedStatic<UserController> mockedStatic = mockStatic(UserController.class)) {
-//            UserController mockUserController = mock(UserController.class);
-//            mockedStatic.when(UserController::getInstance).thenReturn(mockUserController);
-//
-//            SignupRequest signupRequest = new SignupRequest("S2023001", "pw", "홍길동", "컴공");
-//            BasicResponse expected = new BasicResponse("200", "회원가입 성공");
-//            when(mockUserController.handleSignup(signupRequest)).thenReturn(expected);
-//
-//            SystemController controller = new SystemController();
-//            Object response = controller.handle(new UserCommandRequest("회원가입", signupRequest));
-//
-//            assertTrue(response instanceof BasicResponse);
-//            assertEquals("200", ((BasicResponse) response).code);
-//        }
-//    }
-//
-//    @Test
-//    @DisplayName("로그아웃 명령 처리: handleLogout 호출 확인")
-//    void handle_logout_command_should_call_handleLogout() {
-//        try (MockedStatic<UserController> mockedStatic = mockStatic(UserController.class)) {
-//            UserController mockUserController = mock(UserController.class);
-//            mockedStatic.when(UserController::getInstance).thenReturn(mockUserController);
-//
-//            LogoutRequest logoutRequest = new LogoutRequest("S2023001", "pw");
-//            BasicResponse expected = new BasicResponse("200", "로그아웃 성공");
-//            when(mockUserController.handleLogout(logoutRequest)).thenReturn(expected);
-//
-//            SystemController controller = new SystemController();
-//            Object response = controller.handle(new UserCommandRequest("로그아웃", logoutRequest));
-//
-//            assertTrue(response instanceof BasicResponse);
-//            assertEquals("200", ((BasicResponse) response).code);
-//        }
-//    }
-//
-//    @Test
-//    @DisplayName("동시접속자 수 요청 처리: handleCurrentUser 호출 확인")
-//    void handle_current_user_command_should_call_handleCurrentUser() {
-//        try (MockedStatic<UserController> mockedStatic = mockStatic(UserController.class)) {
-//            UserController mockUserController = mock(UserController.class);
-//            mockedStatic.when(UserController::getInstance).thenReturn(mockUserController);
-//
-//            CurrentResponse expected = new CurrentResponse(3);
-//            when(mockUserController.handleCurrentUser()).thenReturn(expected);
-//
-//            SystemController controller = new SystemController();
-//            Object response = controller.handle(new UserCommandRequest("동시접속자", null));
-//
-//            assertTrue(response instanceof CurrentResponse);
-//            assertEquals(3, ((CurrentResponse) response).currentUserCount);
-//        }
-//    }
-//
-//    @Test
-//    @DisplayName("알 수 없는 명령 처리: 404 반환")
-//    void handle_unknown_command_should_return_404() {
-//        SystemController controller = new SystemController();
-//        Object response = controller.handle(new UserCommandRequest("삭제", null));
-//
-//        assertTrue(response instanceof BasicResponse);
-//        assertEquals("404", ((BasicResponse) response).code);
-//    }
-//
-//    @Test
-//    @DisplayName("잘못된 타입 처리: 405 반환")
-//    void handle_invalid_type_should_return_405() {
-//        SystemController controller = new SystemController();
-//        Object response = controller.handle("이건 명령이 아님");
-//
-//        assertTrue(response instanceof BasicResponse);
-//        assertEquals("405", ((BasicResponse) response).code);
-//    }
-//}
 package deu.controller;
 
+import deu.controller.business.LectureController;
+import deu.controller.business.NotificationController;
+import deu.controller.business.ReservationController;
+import deu.controller.business.ReservationManagementController;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Field;
 
 import deu.controller.business.UserController;
-import deu.model.dto.request.data.user.LoginRequest;
-import deu.model.dto.request.data.user.LogoutRequest;
-import deu.model.dto.request.data.user.SignupRequest;
+import deu.controller.business.UserManagementController;
+import deu.model.dto.request.command.LectureCommandRequest;
+import deu.model.dto.request.command.NotificationCommandRequest;
+import deu.model.dto.request.command.ReservationCommandRequest;
+import deu.model.dto.request.command.ReservationManagementCommandRequest;
 import deu.model.dto.request.command.UserCommandRequest;
+import deu.model.dto.request.command.UserManagementCommandRequest;
 import deu.model.dto.response.BasicResponse;
-import deu.model.dto.response.CurrentResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.TestMethodOrder;
+
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SystemControllerTest {
 
     private SystemController systemController;
 
+    private UserController mockUser;
+    private UserManagementController mockUserManage;
+    private LectureController mockLecture;
+    private ReservationController mockReservation;
+    private ReservationManagementController mockResManage;
+    private NotificationController mockNotification;
+
     @BeforeEach
     void setUp() {
         systemController = SystemController.getInstance();
+
+        mockUser = mock(UserController.class);
+        mockUserManage = mock(UserManagementController.class);
+        mockLecture = mock(LectureController.class);
+        mockReservation = mock(ReservationController.class);
+        mockResManage = mock(ReservationManagementController.class);
+        mockNotification = mock(NotificationController.class);
+
+        injectMock(systemController, "userController", mockUser);
+        injectMock(systemController, "userManagementController", mockUserManage);
+        injectMock(systemController, "lectureController", mockLecture);
+        injectMock(systemController, "reservationController", mockReservation);
+        injectMock(systemController, "reservationManagementController", mockResManage);
+        injectMock(systemController, "notificationController", mockNotification);
     }
 
-    // 리플렉션 주입 헬퍼 메서드
-    private void injectMockController(Object target, String fieldName, Object mock) {
+    private void injectMock(Object target, String fieldName, Object mock) {
         try {
             Field field = target.getClass().getDeclaredField(fieldName);
             field.setAccessible(true);
@@ -151,124 +67,125 @@ public class SystemControllerTest {
         }
     }
 
+    // --- [1] 사용자(User) 라우팅 테스트 ---
     @Test
-    @DisplayName("로그인 명령 처리 테스트")
-    void handle_login_command_should_delegate_to_UserController() {
-        System.out.println("\n=== [Test] 로그인 명령 위임 테스트 시작 ===");
+    @Order(1) // 1번으로 실행
+    @DisplayName("UserCommandRequest -> UserController 위임 확인")
+    void test_user_routing() {
+        System.out.println("\n=== [Test 1] 사용자(User) 라우팅 테스트 ===");
         
-        // 1. Mock 설정
-        UserController mockUserController = mock(UserController.class);
-        injectMockController(systemController, "userController", mockUserController);
+        UserCommandRequest request = new UserCommandRequest("로그인", null);
+        when(mockUser.handle(request)).thenReturn(new BasicResponse("200", "OK"));
+        System.out.println("-> Given: '로그인' 요청 준비 완료");
 
-        // 2. 데이터 준비
-        LoginRequest loginRequest = new LoginRequest("S2023001", "pw");
-        UserCommandRequest commandRequest = new UserCommandRequest("로그인", loginRequest);
-        BasicResponse expected = new BasicResponse("200", "로그인 성공");
+        systemController.handle(request);
+        System.out.println("-> When: SystemController.handle() 실행");
 
-        when(mockUserController.handle(commandRequest)).thenReturn(expected);
-
-        // 3. 실행
-        System.out.println("-> SystemController에 '로그인' 요청 전송");
-        Object response = systemController.handle(commandRequest);
-
-        // 4. 결과 확인
-        BasicResponse result = (BasicResponse) response;
-        System.out.println("-> 반환된 결과 코드: " + result.code);
-        System.out.println("-> 반환된 메시지: " + result.data);
-
-        // 5. 검증
-        assertEquals("200", result.code);
-        verify(mockUserController, times(1)).handle(commandRequest);
-        System.out.println("=== [Pass] 로그인 테스트 통과 (UserController 호출 확인됨) ===\n");
+        verify(mockUser, times(1)).handle(request);
+        System.out.println("-> Then: UserController.handle() 호출 확인됨 (Pass)");
     }
 
+    // --- [2] 강의(Lecture) 라우팅 테스트 ---
     @Test
-    @DisplayName("회원가입 명령 처리 테스트")
-    void handle_signup_command_should_delegate_to_UserController() {
-        System.out.println("\n=== [Test] 회원가입 명령 위임 테스트 시작 ===");
+    @Order(2) // 2번으로 실행
+    @DisplayName("LectureCommandRequest -> LectureController 위임 확인")
+    void test_lecture_routing() {
+        System.out.println("\n=== [Test 2] 강의(Lecture) 라우팅 테스트 ===");
         
-        UserController mockUserController = mock(UserController.class);
-        injectMockController(systemController, "userController", mockUserController);
+        LectureCommandRequest request = new LectureCommandRequest("강의 조회", null);
+        when(mockLecture.handle(request)).thenReturn(new BasicResponse("200", "OK"));
+        System.out.println("-> Given: '강의 조회' 요청 준비 완료");
 
-        SignupRequest signupRequest = new SignupRequest("S2023001", "pw", "홍길동", "컴공");
-        UserCommandRequest commandRequest = new UserCommandRequest("회원가입", signupRequest);
-        BasicResponse expected = new BasicResponse("200", "회원가입 성공");
+        systemController.handle(request);
 
-        when(mockUserController.handle(commandRequest)).thenReturn(expected);
-
-        System.out.println("-> SystemController에 '회원가입' 요청 전송");
-        Object response = systemController.handle(commandRequest);
-        
-        BasicResponse result = (BasicResponse) response;
-        System.out.println("-> 반환된 결과: " + result.data);
-
-        assertEquals("200", result.code);
-        verify(mockUserController, times(1)).handle(commandRequest);
-        System.out.println("=== [Pass] 회원가입 테스트 통과 ===\n");
+        verify(mockLecture, times(1)).handle(request);
+        System.out.println("-> Then: LectureController.handle() 호출 확인됨 (Pass)");
     }
 
+    // --- [3] 예약(Reservation) 라우팅 테스트 ---
     @Test
-    @DisplayName("로그아웃 명령 처리 테스트")
-    void handle_logout_command_should_delegate_to_UserController() {
-        System.out.println("\n=== [Test] 로그아웃 명령 위임 테스트 시작 ===");
+    @Order(3) // 3번으로 실행
+    @DisplayName("ReservationCommandRequest -> ReservationController 위임 확인")
+    void test_reservation_routing() {
+        System.out.println("\n=== [Test 3] 예약(Reservation) 라우팅 테스트 ===");
+        
+        ReservationCommandRequest request = new ReservationCommandRequest("예약 요청", null);
+        when(mockReservation.handle(request)).thenReturn(new BasicResponse("200", "OK"));
+        System.out.println("-> Given: '예약 요청' 준비 완료");
 
-        UserController mockUserController = mock(UserController.class);
-        injectMockController(systemController, "userController", mockUserController);
-
-        LogoutRequest logoutRequest = new LogoutRequest("S2023001", "pw");
-        UserCommandRequest commandRequest = new UserCommandRequest("로그아웃", logoutRequest);
-        BasicResponse expected = new BasicResponse("200", "로그아웃 성공");
-
-        when(mockUserController.handle(commandRequest)).thenReturn(expected);
-
-        System.out.println("-> SystemController에 '로그아웃' 요청 전송");
-        Object response = systemController.handle(commandRequest);
-
-        BasicResponse result = (BasicResponse) response;
-        System.out.println("-> 반환된 결과: " + result.data);
-
-        assertEquals("200", result.code);
-        System.out.println("=== [Pass] 로그아웃 테스트 통과 ===\n");
+        systemController.handle(request);
+        verify(mockReservation, times(1)).handle(request);
+        System.out.println("-> Then: ReservationController.handle() 호출 확인됨 (Pass)");
     }
 
+    // --- [4] 예약 관리(Admin) 라우팅 테스트 ---
     @Test
-    @DisplayName("동시접속자 수 요청 처리 테스트")
-    void handle_current_user_command_should_delegate_to_UserController() {
-        System.out.println("\n=== [Test] 동시접속자 조회 위임 테스트 시작 ===");
-
-        UserController mockUserController = mock(UserController.class);
-        injectMockController(systemController, "userController", mockUserController);
-
-        UserCommandRequest commandRequest = new UserCommandRequest("동시접속자", null);
-        CurrentResponse expected = new CurrentResponse(3);
-
-        when(mockUserController.handle(commandRequest)).thenReturn(expected);
-
-        System.out.println("-> SystemController에 '동시접속자' 요청 전송");
-        Object response = systemController.handle(commandRequest);
+    @Order(4) // 4번으로 실행
+    @DisplayName("ReservationManagementCommandRequest -> ReservationManagementController 위임 확인")
+    void test_reservation_management_routing() {
+        System.out.println("\n=== [Test 4] 예약 관리(Admin) 라우팅 테스트 ===");
         
-        CurrentResponse result = (CurrentResponse) response;
-        System.out.println("-> 반환된 접속자 수: " + result.currentUserCount + "명");
+        ReservationManagementCommandRequest request = new ReservationManagementCommandRequest("예약 취소", null);
+        when(mockResManage.handle(request)).thenReturn(new BasicResponse("200", "OK"));
+        System.out.println("-> Given: '예약 취소' 요청 준비 완료");
 
-        assertEquals(3, result.currentUserCount);
-        System.out.println("=== [Pass] 동시접속자 테스트 통과 ===\n");
+        systemController.handle(request);
+        verify(mockResManage, times(1)).handle(request);
+        System.out.println("-> Then: ReservationManagementController.handle() 호출 확인됨 (Pass)");
     }
 
+    // --- [5] 유저 관리(Admin) 라우팅 테스트 ---
     @Test
-    @DisplayName("잘못된 타입(405) 처리 테스트")
-    void handle_invalid_type_should_return_405() {
-        System.out.println("\n=== [Test] 예외(405) 처리 테스트 시작 ===");
+    @Order(5) // 5번으로 실행
+    @DisplayName("UserManagementCommandRequest -> UserManagementController 위임 확인")
+    void test_user_management_routing() {
+        System.out.println("\n=== [Test 5] 유저 관리(Admin) 라우팅 테스트 ===");
         
-        String invalidInput = "이건 명령 객체가 아님";
-        System.out.println("-> 잘못된 입력값 전송: " + invalidInput);
-        
-        Object response = systemController.handle(invalidInput);
-        BasicResponse result = (BasicResponse) response;
-        
-        System.out.println("-> 반환된 코드: " + result.code);
-        System.out.println("-> 반환된 메시지: " + result.data);
+        UserManagementCommandRequest request = new UserManagementCommandRequest("유저 삭제", null);
+        when(mockUserManage.handle(request)).thenReturn(new BasicResponse("200", "OK"));
+        System.out.println("-> Given: '유저 삭제' 요청 준비 완료");
 
-        assertEquals("405", result.code);
-        System.out.println("=== [Pass] 예외 처리 테스트 통과 ===\n");
+        systemController.handle(request);
+        verify(mockUserManage, times(1)).handle(request);
+        System.out.println("-> Then: UserManagementController.handle() 호출 확인됨 (Pass)");
+    }
+
+    // --- [6] 알림(Notification) 라우팅 테스트 ---
+    @Test
+    @Order(6) // 6번으로 실행
+    @DisplayName("NotificationCommandRequest -> NotificationController 위임 확인")
+    void test_notification_routing() {
+        System.out.println("\n=== [Test 6] 알림(Notification) 라우팅 테스트 ===");
+        
+        NotificationCommandRequest request = new NotificationCommandRequest("알림 조회", null);
+        when(mockNotification.handle(request)).thenReturn(new BasicResponse("200", "OK"));
+        System.out.println("-> Given: '알림 조회' 요청 준비 완료");
+
+        systemController.handle(request);
+        verify(mockNotification, times(1)).handle(request);
+        System.out.println("-> Then: NotificationController.handle() 호출 확인됨 (Pass)");
+    }
+    
+    // --- [7] 예외 방어 테스트 ---
+    @Test
+    @Order(7) // 7번으로 실행
+    @DisplayName("[예외] 하위 컨트롤러 에러 발생 시 500 응답 반환")
+    void test_exception_handling() {
+        System.out.println("\n=== [Test 7] 예외 처리(Exception Handling) 테스트 ===");
+        
+        UserCommandRequest request = new UserCommandRequest("에러유발", null);
+        // 에러를 강제로 던짐
+        when(mockUser.handle(request)).thenThrow(new RuntimeException("DB 터짐"));
+        System.out.println("-> Given: 하위 컨트롤러에서 'DB 터짐' 에러 발생 설정");
+
+        Object response = systemController.handle(request);
+        System.out.println("-> When: SystemController 실행 (에러 발생)");
+        
+        BasicResponse result = (BasicResponse) response;
+        System.out.println("-> Result: 코드=" + result.code + ", 메시지=" + result.data);
+        
+        assertEquals("500", result.code);
+        assertTrue(((String)result.data).contains("DB 터짐"));
+        System.out.println("-> Then: 500 에러 코드 및 메시지 확인 완료 (Pass)");
     }
 }
