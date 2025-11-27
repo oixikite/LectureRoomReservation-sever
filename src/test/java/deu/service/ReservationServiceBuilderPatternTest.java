@@ -7,15 +7,17 @@ package deu.service;
 import deu.model.dto.request.data.reservation.AccompanyingStudent;
 import deu.model.dto.request.data.reservation.RoomReservationRequest;
 import deu.model.entity.RoomReservation;
-import deu.model.dto.response.BasicResponse;
+import deu.model.dto.response.BasicResponse; 
 import deu.repository.ReservationRepository;
 import deu.repository.RoomCapacityRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 
 import java.lang.reflect.Field;
@@ -42,30 +44,42 @@ public class ReservationServiceBuilderPatternTest {
     @Mock
     private RoomCapacityRepository roomCapacityRepository; // 가짜 정원 저장소
 
+    // [중요] 정적(Static) 메소드 모킹을 위한 변수
+    private MockedStatic<RoomCapacityRepository> mockedRoomCapacityRepo;
+    
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
         
-        // 싱글톤 Service 내부에 Mock Repository 강제 주입 (Reflection 사용)
-        // 주의: 실제 코드 구조에 따라 생성자 주입이나 Setter 주입이 가능하면 그 방식을 사용하세요.
-        // 여기서는 private 필드에 Mock을 주입하는 방식을 가정합니다.
+        // 1. ReservationService의 reservationRepository 필드에 Mock 주입 (Reflection)
         Field repoField = ReservationService.class.getDeclaredField("reservationRepository");
         repoField.setAccessible(true);
         repoField.set(ReservationService.getInstance(), reservationRepository);
         
-        // 테스트 대상 인스턴스 재설정 (싱글톤 패턴 고려)
         reservationService = ReservationService.getInstance();
+
+        // 2. [핵심] RoomCapacityRepository.getInstance() 호출 시 Mock을 반환하도록 설정
+        // 이렇게 하면 실제 파일(room-capacity.yaml 등)을 건드리지 않습니다.
+        mockedRoomCapacityRepo = mockStatic(RoomCapacityRepository.class);
+        mockedRoomCapacityRepo.when(RoomCapacityRepository::getInstance).thenReturn(roomCapacityRepository);
     }
 
+    @AfterEach
+    void tearDown() {
+        // [필수] 테스트가 끝나면 Static Mock을 반드시 해제해야 다른 테스트에 영향을 주지 않음
+        if (mockedRoomCapacityRepo != null) {
+            mockedRoomCapacityRepo.close();
+        }
+    }
+    
     @Test
-    @DisplayName("[Builder Pattern] 예약 시 목적, 인원, 학번, 이름(동반자) 정보가 정확히 등록되어야 한다")
-    void testBuilderPatternMapping() {
-        // ... (기존 테스트 로직 동일) ...
+    @DisplayName("빌더 패턴을 통해 예약 목적, 인원, 동반자 정보가 엔티티에 정확히 매핑되는지 검증")    
+    void testBuilderPatternDataMapping() {        
         // Given (상황 설정: 사용자가 입력한 예약 요청 데이터)
-        String userId = "S20230001";
+        String userId = "s20223046";
         List<AccompanyingStudent> friends = new ArrayList<>();
-        friends.add(new AccompanyingStudent("S20230002", "김철수")); // 동반자 이름, 학번
-        friends.add(new AccompanyingStudent("S20230003", "이영희"));
+        friends.add(new AccompanyingStudent("s20223046", "이시연"));
+        friends.add(new AccompanyingStudent("s20020425", "시연이"));
 
         RoomReservationRequest request = new RoomReservationRequest();
         request.setBuildingName("공학관");
@@ -106,10 +120,10 @@ public class ReservationServiceBuilderPatternTest {
             () -> assertEquals(2, savedReservation.getAccompanyingStudentCount(), "동반 사용자 수가 일치해야 합니다."),
             () -> assertNotNull(savedReservation.getAccompanyingStudents(), "동반 사용자 목록이 null이 아니어야 합니다."),
             () -> assertEquals(2, savedReservation.getAccompanyingStudents().size(), "동반 사용자 목록 크기가 일치해야 합니다."),
-            () -> assertEquals("김철수", savedReservation.getAccompanyingStudents().get(0).getName(), "첫 번째 동반자 이름이 일치해야 합니다."), // 이름 확인
-            () -> assertEquals("S20230002", savedReservation.getAccompanyingStudents().get(0).getStudentId(), "첫 번째 동반자 학번이 일치해야 합니다.")
+            () -> assertEquals("이시연", savedReservation.getAccompanyingStudents().get(0).getName(), "첫 번째 동반자 이름이 일치해야 합니다."), // 이름 확인
+            () -> assertEquals("s20223046", savedReservation.getAccompanyingStudents().get(0).getStudentId(), "첫 번째 동반자 학번이 일치해야 합니다.")
         );
         
-        System.out.println(">> 빌더 패턴 데이터 매핑 검증 완료: " + savedReservation);
+        System.out.println(">> [Builder Pattern Verified] 데이터 매핑 성공: " + savedReservation);
     }
 }
